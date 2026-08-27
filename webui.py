@@ -522,21 +522,18 @@ def format_voicepack_selection(pack_path):
     )
 
 
-def refresh_voicepack_selector(selected=None, *, select_first=False):
+def refresh_voicepack_selection(selected=None, *, select_first=False):
     choices = voicepack_choices()
     values = [value for _, value in choices]
     if selected not in values:
         selected = values[0] if select_first and values else ""
-    return (
-        gr.update(choices=choices, value=selected, interactive=bool(choices)),
-        format_voicepack_selection(selected),
-    )
+    return selected, format_voicepack_selection(selected)
 
 
 def import_voicepack_from_webui(uploaded_pack):
     """Validate, install and select a dropped ``.ivp`` file."""
     if not uploaded_pack:
-        return (*refresh_voicepack_selector(), gr.update())
+        return (*refresh_voicepack_selection(), gr.update())
     try:
         pack = load_voicepack(
             uploaded_pack,
@@ -553,7 +550,7 @@ def import_voicepack_from_webui(uploaded_pack):
                 if os.path.exists(temporary):
                     os.remove(temporary)
         _voicepack_cache.clear()
-        selected, details = refresh_voicepack_selector(destination)
+        selected, details = refresh_voicepack_selection(destination)
         gr.Info(i18n("音色包已安装并选中"), duration=2)
         return selected, details, gr.update(value=None)
     except Exception as exc:
@@ -627,8 +624,8 @@ def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
         print(f"Failed to export voice pack: {exc}")
         raise gr.Error(f"{i18n('导出音色包失败')}: {exc}") from exc
     _voicepack_cache.clear()
-    selector, details = refresh_voicepack_selector(str(path))
-    return str(path), f"✅ {i18n('音色包已生成')}：`{path}`", selector, details
+    selection, details = refresh_voicepack_selection(str(path))
+    return str(path), f"✅ {i18n('音色包已生成')}：`{path}`", selection, details
 
 
 def update_delete_preset_button(preset_name):
@@ -978,17 +975,14 @@ with gr.Blocks(
                 else ""
             )
             gr.Markdown(f"### {i18n('当前应用音色包')}")
+            selected_voicepack = gr.State(value=_initial_voicepack)
             with gr.Row(equal_height=False):
-                selected_voicepack = gr.Dropdown(
-                    choices=_initial_voicepack_choices,
-                    value=_initial_voicepack,
-                    label=i18n("选择音色包"),
-                    info=i18n("从示例音色包中选择，或拖入自己的 .ivp 音色包"),
-                    interactive=bool(_initial_voicepack_choices),
-                    allow_custom_value=False,
-                    multiselect=False,
-                    scale=2,
-                )
+                with gr.Column(scale=2):
+                    selected_voicepack_status = gr.Markdown(
+                        format_voicepack_selection(_initial_voicepack),
+                        container=True,
+                        min_height=110,
+                    )
                 voicepack_import = gr.File(
                     label=i18n("拖入 .ivp 音色包以安装并选中"),
                     show_label=False,
@@ -998,9 +992,6 @@ with gr.Blocks(
                     scale=1,
                     elem_id="voicepack_drop",
                 )
-            selected_voicepack_status = gr.Markdown(
-                format_voicepack_selection(_initial_voicepack)
-            )
         else:
             gr.Markdown(f"### {i18n('音色参考音频')}")
             with gr.Row(equal_height=False):
@@ -1313,9 +1304,9 @@ with gr.Blocks(
         if IS_V25:
             pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")
             _load_current_voicepack(pack_path)
-            selector, details = refresh_voicepack_selector(pack_path)
+            selection, details = refresh_voicepack_selection(pack_path)
             return [
-                selector,
+                selection,
                 *parameter_updates,
                 gr.update(value=example[14]),
                 details,
@@ -1537,11 +1528,6 @@ with gr.Blocks(
             inputs=[voicepack_import],
             outputs=[selected_voicepack, selected_voicepack_status, voicepack_import],
         )
-        selected_voicepack.change(
-            format_voicepack_selection,
-            inputs=[selected_voicepack],
-            outputs=[selected_voicepack_status],
-        )
     else:
         prompt_audio.upload(
             update_prompt_audio,
@@ -1557,7 +1543,7 @@ with gr.Blocks(
     def on_demo_load():
         """Refresh the active model's UI-managed resources."""
         if IS_V25:
-            return (gr.update(), *refresh_voicepack_selector(select_first=True))
+            return (gr.update(), *refresh_voicepack_selection(select_first=True))
         if not hasattr(tts, 'normalizer'):
             return (gr.update(), *refresh_preset_choices())
         try:
