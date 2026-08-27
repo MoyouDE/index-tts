@@ -139,5 +139,15 @@
   "导入音色包失败": "Error al importar el paquete de voz",
   "示例音色": "Voz de ejemplo",
   "请选择音色包或上传音色参考音频": "Selecciona un paquete de voz o carga un audio de referencia",
-  "使用上方参考音频（不使用音色包）": "Usar el audio de referencia superior (sin paquete de voz)"
+  "使用上方参考音频（不使用音色包）": "Usar el audio de referencia superior (sin paquete de voz)",
+  "未选择音色包": "No hay paquete de voz seleccionado",
+  "请选择音色包": "Selecciona un paquete de voz",
+  "从示例音色包中选择，或拖入自己的 .ivp 音色包": "Elige un paquete de ejemplo o arrastra tu propio .ivp.",
+  "音色包": "Paquete de voz",
+  "快速设置（自动选择对应音色包）": "Configuración rápida (selecciona el paquete correspondiente)",
+  "音色包制作": "Creador de paquetes de voz",
+  "从参考音频制作音色包": "Crear un paquete desde audio de referencia",
+  "制作完成后会自动安装到应用音色包列表，并选中该音色。": "El paquete terminado se instala en la lista de la aplicación y se selecciona automáticamente.",
+  "阅读音色": "Voz de lectura",
+  "生成并安装音色包": "Crear e instalar paquete de voz"
 }

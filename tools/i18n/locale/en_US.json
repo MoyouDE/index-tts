@@ -139,5 +139,15 @@
   "导入音色包失败": "Failed to import voice pack",
   "示例音色": "Example voice",
   "请选择音色包或上传音色参考音频": "Select a voice pack or upload reference audio",
-  "使用上方参考音频（不使用音色包）": "Use the reference audio above (no voice pack)"
+  "使用上方参考音频（不使用音色包）": "Use the reference audio above (no voice pack)",
+  "未选择音色包": "No voice pack selected",
+  "请选择音色包": "Select a voice pack",
+  "从示例音色包中选择，或拖入自己的 .ivp 音色包": "Choose an example voice pack or drop your own .ivp pack.",
+  "音色包": "Voice Pack",
+  "快速设置（自动选择对应音色包）": "Quick Settings (selects the matching voice pack)",
+  "音色包制作": "Voice Pack Builder",
+  "从参考音频制作音色包": "Build a voice pack from reference audio",
+  "制作完成后会自动安装到应用音色包列表，并选中该音色。": "The finished pack is installed into the application list and selected automatically.",
+  "阅读音色": "Reader Voice",
+  "生成并安装音色包": "Build and Install Voice Pack"
 }

@@ -9,12 +9,12 @@ def test_webui_python_source_parses():
     assert compile(source, str(webui_path), "exec") is not None
 
 
-def test_webui_exposes_voicepack_export_separately_from_presets():
+def test_webui_exposes_voicepack_builder_in_a_separate_tab():
     webui_path = Path(__file__).resolve().parents[1] / "webui.py"
     source = webui_path.read_text(encoding="utf-8")
 
-    assert 'i18n("保存为预设")' in source
-    assert 'i18n("导出音色包")' in source
+    assert 'with gr.Tab(i18n("音色包制作"))' in source
+    assert 'i18n("生成并安装音色包")' in source
     assert "export_voicepack_from_webui" in source
     assert "VoicePackBuilder" in source
 
@@ -27,8 +27,9 @@ def test_webui_can_install_select_and_synthesize_from_voicepacks():
     assert "import_voicepack_from_webui" in source
     assert "selected_voicepack" in source
     assert 'infer_kwargs["voice_conditioning"] = voice_conditioning' in source
-    assert "_example_voicepack(example[0])" in source
-    assert "使用上方参考音频（不使用音色包）" in source
+    assert "prebuild_example_voicepacks()" in source
+    assert 'pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")' in source
+    assert "快速设置（自动选择对应音色包）" in source
 
 
 def test_all_locale_files_are_valid_json():

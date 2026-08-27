@@ -172,6 +172,7 @@ voicepack_builder = VoicePackBuilder(
 VOICEPACK_DIR = os.path.abspath(os.path.join("outputs", "voicepacks"))
 os.makedirs(VOICEPACK_DIR, exist_ok=True)
 _voicepack_cache = {}
+mutex = threading.Lock()
 # 支持的语言列表
 LANGUAGES = {
     "中文": "zh_CN",
@@ -222,10 +223,18 @@ with open("examples/cases.jsonl", "r", encoding="utf-8") as f:
 
 def get_example_cases(include_experimental = False):
     if include_experimental and LOAD_QWEN_EMO:
-        return example_cases  # show every example
+        cases = example_cases  # show every example
+    else:
+        # exclude emotion control mode 3 (emotion from text description)
+        cases = [x for x in example_cases if x[1] != EMO_CHOICES_ALL[3]]
 
-    # exclude emotion control mode 3 (emotion from text description)
-    return [x for x in example_cases if x[1] != EMO_CHOICES_ALL[3]]
+    if IS_V25:
+        # The first UI column represents the installed voice pack, not its source WAV.
+        return [
+            [os.path.splitext(os.path.basename(_example_voicepack_path(case[0])))[0], *case[1:]]
+            for case in cases
+        ]
+    return cases
 
 def format_glossary_markdown():
     """将词汇表转换为Markdown表格格式"""
@@ -496,14 +505,12 @@ def list_application_voicepacks():
 
 
 def voicepack_choices():
-    return [(i18n("使用上方参考音频（不使用音色包）"), "")] + [
-        (_voicepack_label(pack), path) for pack, path in list_application_voicepacks()
-    ]
+    return [(_voicepack_label(pack), path) for pack, path in list_application_voicepacks()]
 
 
 def format_voicepack_selection(pack_path):
     if not pack_path:
-        return i18n("未选择音色包，将使用上方参考音频")
+        return i18n("未选择音色包")
     try:
         pack = _load_current_voicepack(pack_path)
     except Exception as exc:
@@ -519,9 +526,9 @@ def refresh_voicepack_selector(selected=None, *, select_first=False):
     choices = voicepack_choices()
     values = [value for _, value in choices]
     if selected not in values:
-        selected = values[1] if select_first and len(values) > 1 else ""
+        selected = values[0] if select_first and values else ""
     return (
-        gr.update(choices=choices, value=selected, interactive=True),
+        gr.update(choices=choices, value=selected, interactive=bool(choices)),
         format_voicepack_selection(selected),
     )
 
@@ -554,11 +561,17 @@ def import_voicepack_from_webui(uploaded_pack):
         raise gr.Error(f"{i18n('导入音色包失败')}: {exc}") from exc
 
 
-def _example_voicepack(audio_path):
+def _example_voicepack_path(audio_path):
     stem = os.path.splitext(os.path.basename(audio_path))[0]
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "voice"
     voice_id = f"example-{safe_stem}"[:64]
-    output_path = os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
+    return os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
+
+
+def _build_example_voicepack(audio_path):
+    output_path = _example_voicepack_path(audio_path)
+    stem = os.path.splitext(os.path.basename(audio_path))[0]
+    voice_id = os.path.splitext(os.path.basename(output_path))[0]
     if os.path.isfile(output_path):
         try:
             _load_current_voicepack(output_path)
@@ -577,6 +590,17 @@ def _example_voicepack(audio_path):
         )
     _voicepack_cache.clear()
     return output_path
+
+
+def prebuild_example_voicepacks():
+    """Prepare every official example voice before the UI becomes interactive."""
+    if not IS_V25:
+        return
+    unique_audio = list(dict.fromkeys(example[0] for example in example_cases))
+    print(f">> Preparing {len(unique_audio)} example voice packs...")
+    for index, audio_path in enumerate(unique_audio, start=1):
+        output_path = _build_example_voicepack(audio_path)
+        print(f">> Example voice pack {index}/{len(unique_audio)} ready: {output_path}")
 
 
 def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
@@ -853,6 +877,8 @@ def gen_single(emo_control_method, prompt, selected_voicepack, text,
             voice_conditioning = _load_current_voicepack(selected_voicepack).tensors
         except Exception as exc:
             raise gr.Error(f"{i18n('音色包不可用')}：{exc}") from exc
+    elif IS_V25:
+        raise gr.Error(i18n("请选择音色包"))
     elif not prompt:
         raise gr.Error(i18n("请选择音色包或上传音色参考音频"))
 
@@ -882,6 +908,8 @@ def create_warning_message(warning_text):
 
 def create_experimental_warning_message():
     return create_warning_message(i18n('提示：此功能为实验版，结果尚不稳定，我们正在持续优化中。'))
+
+prebuild_example_voicepacks()
 
 with gr.Blocks(
     title=f"IndexTTS-{cmd_args.version} Demo",
@@ -931,7 +959,6 @@ with gr.Blocks(
         }
     """,
 ) as demo:
-    mutex = threading.Lock()
     arxiv_id = "2601.03888" if IS_V25 else "2506.21619"
     gr.HTML(f'''
        <h2 style="text-align:center">IndexTTS-{cmd_args.version}</h2>
@@ -943,65 +970,11 @@ with gr.Blocks(
     with gr.Tab(i18n("音频生成")):
         os.makedirs("prompts", exist_ok=True)
 
-        # Voice reference section: upload audio OR load from preset
-        gr.Markdown(f"### {i18n('音色参考音频')}")
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=1):
-                prompt_audio = gr.Audio(
-                    label="",
-                    key="prompt_audio",
-                    sources=["upload", "microphone"],
-                    type="filepath",
-                    elem_classes=["compact-audio"],
-                    elem_id="prompt_audio_compact",
-                )
-                with gr.Row():
-                    save_preset_btn = gr.Button(
-                        i18n("保存为预设"), interactive=False
-                    )
-                    if IS_V25:
-                        export_voicepack_btn = gr.Button(
-                            i18n("导出音色包"), interactive=False, variant="secondary"
-                        )
-
-            with gr.Column(scale=1):
-                _has_presets = bool(list_presets())
-                load_preset_dropdown = gr.Dropdown(
-                    choices=[""] + list_presets(),
-                    value="",
-                    label=i18n("从预设加载"),
-                    info=i18n("从预设加载音色和参数"),
-                    allow_custom_value=False,
-                    interactive=_has_presets,
-                )
-
         if IS_V25:
-            with gr.Accordion(i18n("音色包信息"), open=False):
-                gr.Markdown(i18n("音色包只保存预计算张量，不包含参考音频。"))
-                with gr.Row():
-                    voicepack_id = gr.Textbox(
-                        label=i18n("音色 ID"),
-                        placeholder="reader-female-01",
-                        info=i18n("仅可使用字母、数字、点、下划线和连字符"),
-                    )
-                    voicepack_name = gr.Textbox(label=i18n("音色名称"), placeholder=i18n("例如：阅读女声"))
-                    voicepack_gender = gr.Dropdown(
-                        choices=[
-                            (i18n("女声"), "female"),
-                            (i18n("男声"), "male"),
-                            (i18n("中性"), "neutral"),
-                            (i18n("未知"), "unknown"),
-                        ],
-                        value="unknown",
-                        label=i18n("性别"),
-                    )
-                voicepack_status = gr.Markdown("")
-                voicepack_download = gr.File(label=i18n("下载音色包"), interactive=False)
-
             _initial_voicepack_choices = voicepack_choices()
             _initial_voicepack = (
-                _initial_voicepack_choices[1][1]
-                if len(_initial_voicepack_choices) > 1
+                _initial_voicepack_choices[0][1]
+                if _initial_voicepack_choices
                 else ""
             )
             gr.Markdown(f"### {i18n('当前应用音色包')}")
@@ -1010,8 +983,8 @@ with gr.Blocks(
                     choices=_initial_voicepack_choices,
                     value=_initial_voicepack,
                     label=i18n("选择音色包"),
-                    info=i18n("选中后直接使用预计算音色，生成时不再读取参考音频"),
-                    interactive=True,
+                    info=i18n("从示例音色包中选择，或拖入自己的 .ivp 音色包"),
+                    interactive=bool(_initial_voicepack_choices),
                     scale=2,
                 )
                 voicepack_import = gr.File(
@@ -1026,7 +999,27 @@ with gr.Blocks(
                 format_voicepack_selection(_initial_voicepack)
             )
         else:
+            gr.Markdown(f"### {i18n('音色参考音频')}")
+            with gr.Row(equal_height=False):
+                prompt_audio = gr.Audio(
+                    label="",
+                    key="prompt_audio",
+                    sources=["upload", "microphone"],
+                    type="filepath",
+                    elem_classes=["compact-audio"],
+                    elem_id="prompt_audio_compact",
+                )
             selected_voicepack = gr.State(value="")
+            save_preset_btn = gr.Button(i18n("保存为预设"), interactive=False)
+            _has_presets = bool(list_presets())
+            load_preset_dropdown = gr.Dropdown(
+                choices=[""] + list_presets(),
+                value="",
+                label=i18n("从预设加载"),
+                info=i18n("从预设加载音色和参数"),
+                allow_custom_value=False,
+                interactive=_has_presets,
+            )
 
         # Text input and generation section
         gr.Markdown(f"### {i18n('文本')}")
@@ -1180,7 +1173,8 @@ with gr.Blocks(
         # these components are NOT "connected". it just reads the column labels/available
         # states from them, so we MUST link to the "all options" versions of all components,
         # such as `emo_control_method_all` (to be able to see EXPERIMENTAL text labels)!
-        example_components = [prompt_audio,
+        example_voice_component = gr.Textbox(label=i18n("音色包"), render=False)
+        example_components = [example_voice_component,
                         emo_control_method_all,  # important: support all mode labels!
                         input_text_single,
                         emo_upload,
@@ -1190,72 +1184,115 @@ with gr.Blocks(
         # v2.5: append the language column so ja/es/ar examples auto-select it
         if IS_V25:
             example_components.append(lang_dropdown)
-        example_table = gr.Dataset(label="Examples",
+        example_table = gr.Dataset(label=i18n("快速设置（自动选择对应音色包）"),
             samples_per_page=20,
             samples=get_example_cases(include_experimental=False),
             type="values",
             components=example_components
         )
 
-    with gr.Tab(i18n("预设管理")):
-        gr.Markdown(f"## {i18n('预设管理')}")
-
-        with gr.Row():
-            _has_presets = bool(list_presets())
-            manage_preset_dropdown = gr.Dropdown(
-                choices=[""] + list_presets(),
-                value="",
-                label=i18n("预设列表"),
-                allow_custom_value=False,
-                scale=2,
-                interactive=_has_presets,
-            )
-            apply_preset_btn = gr.Button(i18n("应用"), scale=1)
-            delete_preset_btn = gr.Button(i18n("删除"), scale=1, interactive=False)
-            refresh_preset_btn = gr.Button(i18n("刷新"), scale=1)
-
-        preset_details_markdown = gr.Markdown(
-            value=i18n("请选择要管理的预设"),
-        )
-
-        with gr.Accordion(i18n("从当前状态创建"), open=False):
+    if IS_V25:
+        with gr.Tab(i18n("音色包制作")):
+            gr.Markdown(f"## {i18n('从参考音频制作音色包')}")
+            gr.Markdown(i18n("制作完成后会自动安装到应用音色包列表，并选中该音色。"))
             with gr.Row():
-                create_preset_name = gr.Textbox(
+                with gr.Column(scale=1):
+                    prompt_audio = gr.Audio(
+                        label=i18n("音色参考音频"),
+                        key="voicepack_reference_audio",
+                        sources=["upload", "microphone"],
+                        type="filepath",
+                        elem_classes=["compact-audio"],
+                        elem_id="prompt_audio_compact",
+                    )
+                with gr.Column(scale=1):
+                    voicepack_id = gr.Textbox(
+                        label=i18n("音色 ID"),
+                        value="reader-voice-01",
+                        info=i18n("仅可使用字母、数字、点、下划线和连字符"),
+                    )
+                    voicepack_name = gr.Textbox(
+                        label=i18n("音色名称"),
+                        value=i18n("阅读音色"),
+                    )
+                    voicepack_gender = gr.Dropdown(
+                        choices=[
+                            (i18n("女声"), "female"),
+                            (i18n("男声"), "male"),
+                            (i18n("中性"), "neutral"),
+                            (i18n("未知"), "unknown"),
+                        ],
+                        value="unknown",
+                        label=i18n("性别"),
+                    )
+                    export_voicepack_btn = gr.Button(
+                        i18n("生成并安装音色包"),
+                        interactive=False,
+                        variant="primary",
+                    )
+            gr.Markdown(i18n("音色包只保存预计算张量，不包含参考音频。"))
+            voicepack_status = gr.Markdown("")
+            voicepack_download = gr.File(label=i18n("下载音色包"), interactive=False)
+
+    if not IS_V25:
+        with gr.Tab(i18n("预设管理")):
+            gr.Markdown(f"## {i18n('预设管理')}")
+
+            with gr.Row():
+                _has_presets = bool(list_presets())
+                manage_preset_dropdown = gr.Dropdown(
+                    choices=[""] + list_presets(),
+                    value="",
+                    label=i18n("预设列表"),
+                    allow_custom_value=False,
+                    scale=2,
+                    interactive=_has_presets,
+                )
+                apply_preset_btn = gr.Button(i18n("应用"), scale=1)
+                delete_preset_btn = gr.Button(i18n("删除"), scale=1, interactive=False)
+                refresh_preset_btn = gr.Button(i18n("刷新"), scale=1)
+
+            preset_details_markdown = gr.Markdown(
+                value=i18n("请选择要管理的预设"),
+            )
+
+            with gr.Accordion(i18n("从当前状态创建"), open=False):
+                with gr.Row():
+                    create_preset_name = gr.Textbox(
+                        label=i18n("预设名称"),
+                        placeholder=i18n("请输入预设名称"),
+                        value="",
+                        scale=2,
+                    )
+                    create_preset_btn = gr.Button(i18n("创建"), scale=1)
+
+        # -------------------------------------------------------------------
+        # Save Preset Modal (IndexTTS-2 legacy UI only)
+        # -------------------------------------------------------------------
+        with gr.Column(
+            visible=False,
+            elem_classes=["preset-modal-overlay"],
+        ) as save_preset_modal:
+            with gr.Column(elem_classes=["preset-modal-content"]):
+                gr.Markdown(f"### {i18n('保存预设')}")
+                modal_preset_preview = gr.Markdown(
+                    label=i18n("预设预览"),
+                    value=i18n("预设预览"),
+                )
+                modal_preset_name = gr.Textbox(
                     label=i18n("预设名称"),
                     placeholder=i18n("请输入预设名称"),
                     value="",
-                    scale=2,
                 )
-                create_preset_btn = gr.Button(i18n("创建"), scale=1)
-
-    # ---------------------------------------------------------------------------
-    # Save Preset Modal (global overlay, placed after all tabs)
-    # ---------------------------------------------------------------------------
-    with gr.Column(
-        visible=False,
-        elem_classes=["preset-modal-overlay"],
-    ) as save_preset_modal:
-        with gr.Column(elem_classes=["preset-modal-content"]):
-            gr.Markdown(f"### {i18n('保存预设')}")
-            modal_preset_preview = gr.Markdown(
-                label=i18n("预设预览"),
-                value=i18n("预设预览"),
-            )
-            modal_preset_name = gr.Textbox(
-                label=i18n("预设名称"),
-                placeholder=i18n("请输入预设名称"),
-                value="",
-            )
-            with gr.Row():
-                modal_cancel_btn = gr.Button(i18n("取消"), scale=1)
-                modal_confirm_btn = gr.Button(
-                    i18n("确认"), scale=1, variant="primary"
-                )
+                with gr.Row():
+                    modal_cancel_btn = gr.Button(i18n("取消"), scale=1)
+                    modal_confirm_btn = gr.Button(
+                        i18n("确认"), scale=1, variant="primary"
+                    )
 
     def on_example_click(example):
         print(f"Example clicked: ({len(example)} values) = {example!r}")
-        updates = [
-            gr.update(value=example[0]),
+        parameter_updates = [
             gr.update(value=example[1]),
             gr.update(value=example[2]),
             gr.update(value=example[3]),
@@ -1270,28 +1307,41 @@ with gr.Blocks(
             gr.update(value=example[12]),
             gr.update(value=example[13]),
         ]
-        # v2.5: also restore the per-example language
         if IS_V25:
-            updates.append(gr.update(value=example[14]))
-            pack_path = _example_voicepack(example[0])
+            pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")
+            _load_current_voicepack(pack_path)
             selector, details = refresh_voicepack_selector(pack_path)
-            updates.extend([selector, details])
-        return updates
+            return [
+                selector,
+                *parameter_updates,
+                gr.update(value=example[14]),
+                details,
+            ]
+        return [gr.update(value=example[0]), *parameter_updates]
 
     # click() event works on both desktop and mobile UI
-    example_outputs = [prompt_audio,
-                                 emo_control_method,
-                                 input_text_single,
-                                 emo_upload,
-                                 emo_weight,
-                                 emo_text,
-                                 vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8]
     if IS_V25:
-        example_outputs.extend([
-            lang_dropdown,
+        example_outputs = [
             selected_voicepack,
+            emo_control_method,
+            input_text_single,
+            emo_upload,
+            emo_weight,
+            emo_text,
+            vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
+            lang_dropdown,
             selected_voicepack_status,
-        ])
+        ]
+    else:
+        example_outputs = [
+            prompt_audio,
+            emo_control_method,
+            input_text_single,
+            emo_upload,
+            emo_weight,
+            emo_text,
+            vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
+        ]
     example_table.click(on_example_click,
                         inputs=[example_table],
                         outputs=example_outputs
@@ -1463,16 +1513,6 @@ with gr.Blocks(
             outputs=[segments_preview]
         )
 
-    prompt_audio.upload(update_prompt_audio,
-                         inputs=[],
-                         outputs=[gen_button])
-
-    prompt_audio.change(
-        update_save_preset_button,
-        inputs=[prompt_audio],
-        outputs=[save_preset_btn]
-    )
-
     if IS_V25:
         prompt_audio.change(
             update_export_voicepack_button,
@@ -1499,14 +1539,24 @@ with gr.Blocks(
             inputs=[selected_voicepack],
             outputs=[selected_voicepack_status],
         )
+    else:
+        prompt_audio.upload(
+            update_prompt_audio,
+            inputs=[],
+            outputs=[gen_button],
+        )
+        prompt_audio.change(
+            update_save_preset_button,
+            inputs=[prompt_audio],
+            outputs=[save_preset_btn],
+        )
 
     def on_demo_load():
-        """页面加载时重新加载glossary数据并刷新预设列表"""
-        if IS_V25 or not hasattr(tts, 'normalizer'):
-            base = (gr.update(), *refresh_preset_choices())
-            if IS_V25:
-                return (*base, *refresh_voicepack_selector(select_first=True))
-            return base
+        """Refresh the active model's UI-managed resources."""
+        if IS_V25:
+            return (gr.update(), *refresh_voicepack_selector(select_first=True))
+        if not hasattr(tts, 'normalizer'):
+            return (gr.update(), *refresh_preset_choices())
         try:
             tts.normalizer.load_glossary_from_yaml(tts.glossary_path)
         except Exception as e:
@@ -1523,123 +1573,113 @@ with gr.Blocks(
     )
 
     # 页面加载时重新加载glossary并刷新预设列表
-    _demo_load_outputs = [glossary_table, load_preset_dropdown, manage_preset_dropdown]
     if IS_V25:
-        _demo_load_outputs.extend([selected_voicepack, selected_voicepack_status])
+        _demo_load_outputs = [
+            glossary_table,
+            selected_voicepack,
+            selected_voicepack_status,
+        ]
+    else:
+        _demo_load_outputs = [
+            glossary_table,
+            load_preset_dropdown,
+            manage_preset_dropdown,
+        ]
     demo.load(
         on_demo_load,
         inputs=[],
         outputs=_demo_load_outputs,
     )
 
-    # Preset event bindings
-    _preset_load_outputs = [
-        experimental_checkbox,
-        emo_control_method,
-        prompt_audio,
-        emo_upload,
-        emo_weight,
-        vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
-        emo_text,
-        emo_random,
-        do_sample,
-        top_p,
-        top_k,
-        temperature,
-        length_penalty,
-        num_beams,
-        repetition_penalty,
-        max_mel_tokens,
-        max_text_tokens_per_segment,
-    ]
-    _preset_save_inputs = [
-        prompt_audio,
-        emo_control_method,
-        emo_upload,
-        emo_weight,
-        vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
-        emo_text,
-        emo_random,
-        do_sample,
-        top_p,
-        top_k,
-        temperature,
-        length_penalty,
-        num_beams,
-        repetition_penalty,
-        max_mel_tokens,
-        max_text_tokens_per_segment,
-    ]
+    if not IS_V25:
+        _preset_load_outputs = [
+            experimental_checkbox,
+            emo_control_method,
+            prompt_audio,
+            emo_upload,
+            emo_weight,
+            vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
+            emo_text,
+            emo_random,
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+            max_text_tokens_per_segment,
+        ]
+        _preset_save_inputs = [
+            prompt_audio,
+            emo_control_method,
+            emo_upload,
+            emo_weight,
+            vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
+            emo_text,
+            emo_random,
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+            max_text_tokens_per_segment,
+        ]
 
-    # Audio generation tab: load from preset on dropdown change
-    load_preset_dropdown.change(
-        on_preset_load,
-        inputs=[load_preset_dropdown],
-        outputs=_preset_load_outputs,
-    )
-
-    # Audio generation tab: save current state as preset (opens modal)
-    save_preset_btn.click(
-        open_save_preset_modal,
-        inputs=_preset_save_inputs,
-        outputs=[save_preset_modal, modal_preset_preview, modal_preset_name],
-    )
-
-    # Save preset modal: confirm
-    modal_confirm_btn.click(
-        confirm_save_preset_from_modal,
-        inputs=[modal_preset_name] + _preset_save_inputs,
-        outputs=[save_preset_modal, load_preset_dropdown, manage_preset_dropdown],
-    )
-
-    # Save preset modal: cancel
-    modal_cancel_btn.click(
-        close_save_preset_modal,
-        inputs=[],
-        outputs=[save_preset_modal],
-    )
-
-    # Preset management tab: view details
-    manage_preset_dropdown.change(
-        format_preset_details,
-        inputs=[manage_preset_dropdown],
-        outputs=[preset_details_markdown],
-    )
-
-    # Preset management tab: enable/disable delete button
-    manage_preset_dropdown.change(
-        update_delete_preset_button,
-        inputs=[manage_preset_dropdown],
-        outputs=[delete_preset_btn],
-    )
-
-    # Preset management tab: apply preset to audio generation tab
-    apply_preset_btn.click(
-        on_preset_load,
-        inputs=[manage_preset_dropdown],
-        outputs=_preset_load_outputs,
-    )
-
-    # Preset management tab: delete preset
-    delete_preset_btn.click(
-        on_preset_delete,
-        inputs=[manage_preset_dropdown],
-        outputs=[load_preset_dropdown, manage_preset_dropdown],
-    )
-
-    # Preset management tab: refresh list
-    refresh_preset_btn.click(
-        refresh_preset_choices,
-        inputs=[],
-        outputs=[load_preset_dropdown, manage_preset_dropdown],
-    )
-
-    # Preset management tab: create from current state
-    create_preset_btn.click(
-        on_preset_save,
-        inputs=[create_preset_name] + _preset_save_inputs,
-        outputs=[load_preset_dropdown, manage_preset_dropdown],
-    )
+        load_preset_dropdown.change(
+            on_preset_load,
+            inputs=[load_preset_dropdown],
+            outputs=_preset_load_outputs,
+        )
+        save_preset_btn.click(
+            open_save_preset_modal,
+            inputs=_preset_save_inputs,
+            outputs=[save_preset_modal, modal_preset_preview, modal_preset_name],
+        )
+        modal_confirm_btn.click(
+            confirm_save_preset_from_modal,
+            inputs=[modal_preset_name] + _preset_save_inputs,
+            outputs=[save_preset_modal, load_preset_dropdown, manage_preset_dropdown],
+        )
+        modal_cancel_btn.click(
+            close_save_preset_modal,
+            inputs=[],
+            outputs=[save_preset_modal],
+        )
+        manage_preset_dropdown.change(
+            format_preset_details,
+            inputs=[manage_preset_dropdown],
+            outputs=[preset_details_markdown],
+        )
+        manage_preset_dropdown.change(
+            update_delete_preset_button,
+            inputs=[manage_preset_dropdown],
+            outputs=[delete_preset_btn],
+        )
+        apply_preset_btn.click(
+            on_preset_load,
+            inputs=[manage_preset_dropdown],
+            outputs=_preset_load_outputs,
+        )
+        delete_preset_btn.click(
+            on_preset_delete,
+            inputs=[manage_preset_dropdown],
+            outputs=[load_preset_dropdown, manage_preset_dropdown],
+        )
+        refresh_preset_btn.click(
+            refresh_preset_choices,
+            inputs=[],
+            outputs=[load_preset_dropdown, manage_preset_dropdown],
+        )
+        create_preset_btn.click(
+            on_preset_save,
+            inputs=[create_preset_name] + _preset_save_inputs,
+            outputs=[load_preset_dropdown, manage_preset_dropdown],
+        )
 
     gen_button.click(gen_single,
                      inputs=[emo_control_method, prompt_audio, selected_voicepack, input_text_single,
