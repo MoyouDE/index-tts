@@ -1,6 +1,6 @@
-import importlib
 import io
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -70,16 +70,29 @@ def test_qwen_invalid_json_is_rejected(tmp_path):
 
 
 def test_runtime_import_does_not_load_reference_encoders_or_webui():
-    importlib.import_module("indextts.runtime.engine")
-    forbidden = {
-        "indextts.infer_v2_5",
-        "indextts.s2mel.wav2vecbert_extract",
-        "indextts.s2mel.modules.campplus.DTDNN",
-        "indextts.utils.ja_g2p",
-        "gradio",
-        "pandas",
-    }
-    assert forbidden.isdisjoint(sys.modules)
+    script = r'''
+import importlib
+import json
+import sys
+importlib.import_module("indextts.runtime.engine")
+forbidden = {
+    "indextts.infer_v2_5",
+    "indextts.s2mel.wav2vecbert_extract",
+    "indextts.s2mel.modules.campplus.DTDNN",
+    "indextts.utils.ja_g2p",
+    "gradio",
+    "pandas",
+}
+print(json.dumps(sorted(forbidden.intersection(sys.modules))))
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert json.loads(result.stdout) == []
 
 
 class _FakeRuntime:

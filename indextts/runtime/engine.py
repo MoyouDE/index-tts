@@ -198,12 +198,15 @@ class ReaderRuntime:
         tensors = self._voices[voice_id].tensors
         speaker = tensors["speaker_latent"].to(self.device, dtype=self.dtype)
         base = tensors["base_emotion"].to(self.device, dtype=self.dtype)
-        basis = tensors["emotion_basis"].to(self.device, dtype=self.dtype)
-        weights = torch.tensor(vector, device=self.device, dtype=self.dtype)
+        # Match the full inference path exactly: selected emotion bases and
+        # weights are FP32, while the encoded base emotion and speaker projection
+        # are BF16. The promotion to FP32 here prevents late autoregressive drift.
+        basis = tensors["emotion_basis"].to(self.device, dtype=torch.float32)
+        weights = torch.tensor(vector, device=self.device, dtype=torch.float32)
         emotion = torch.sum(weights.unsqueeze(1) * basis, dim=0, keepdim=True)
         emotion = emotion + (1 - weights.sum()) * base
         first = (speaker + emotion).unsqueeze(1)
-        zeros = torch.zeros((1, 2, first.shape[-1]), device=self.device, dtype=self.dtype)
+        zeros = torch.zeros((1, 2, first.shape[-1]), device=self.device, dtype=first.dtype)
         return (
             torch.cat([first, zeros], dim=1),
             tensors["prompt_condition"].to(self.device, dtype=torch.float32),
