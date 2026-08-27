@@ -109,4 +109,22 @@
   "删除": "Eliminar",
   "情感向量": "Vector de emociones",
   "语言": "Idioma"
+  ,"导出音色包": "Exportar paquete de voz",
+  "音色包信息": "Información del paquete de voz",
+  "音色包只保存预计算张量，不包含参考音频。": "El paquete solo guarda tensores precalculados; no incluye el audio de referencia.",
+  "音色 ID": "ID de voz",
+  "音色名称": "Nombre de voz",
+  "例如：阅读女声": "Por ejemplo: voz de lectura",
+  "仅可使用字母、数字、点、下划线和连字符": "Use solo letras, números, puntos, guiones bajos y guiones",
+  "女声": "Femenina",
+  "男声": "Masculina",
+  "中性": "Neutra",
+  "性别": "Género",
+  "下载音色包": "Descargar paquete de voz",
+  "导出音色包仅支持 IndexTTS-2.5": "La exportación requiere IndexTTS-2.5",
+  "请先上传音色参考音频": "Suba primero un audio de referencia",
+  "音色 ID 格式无效": "ID de voz no válido",
+  "音色名称不能为空": "El nombre de voz es obligatorio",
+  "导出音色包失败": "Error al exportar el paquete de voz",
+  "音色包已生成": "Paquete de voz creado"
 }

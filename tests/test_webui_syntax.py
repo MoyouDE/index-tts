@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 
 def test_webui_python_source_parses():
@@ -6,3 +7,20 @@ def test_webui_python_source_parses():
     source = webui_path.read_text(encoding="utf-8")
 
     assert compile(source, str(webui_path), "exec") is not None
+
+
+def test_webui_exposes_voicepack_export_separately_from_presets():
+    webui_path = Path(__file__).resolve().parents[1] / "webui.py"
+    source = webui_path.read_text(encoding="utf-8")
+
+    assert 'i18n("保存为预设")' in source
+    assert 'i18n("导出音色包")' in source
+    assert "export_voicepack_from_webui" in source
+    assert "VoicePackBuilder" in source
+
+
+def test_all_locale_files_are_valid_json():
+    locale_dir = Path(__file__).resolve().parents[1] / "tools" / "i18n" / "locale"
+    for path in locale_dir.glob("*.json"):
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+        assert isinstance(parsed, dict) and parsed, path

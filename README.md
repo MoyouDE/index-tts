@@ -62,6 +62,11 @@ Japanese Kana), and faster inference than IndexTTS-2.
 
 ## 🚀 Getting Started
 
+> [!NOTE]
+> The `readest-integration` branch also provides deterministic `.ivp` voice
+> packs, a reference-free slim model exporter, and a JSONL reader sidecar.
+> See [Readest voice packs and reader runtime](docs/reader-runtime.md).
+
 ### 1. Prerequisites
 
 Make sure you have [git](https://git-scm.com/downloads) installed, then download

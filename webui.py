@@ -1,6 +1,7 @@
 import html
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -101,6 +102,7 @@ from tools.i18n.i18n import I18nAuto
 
 if IS_V25:
     from indextts.infer_v2_5 import IndexTTS2
+    from indextts.voicepack import VoicePackBuilder
 else:
     from indextts.infer_v2 import IndexTTS2
 
@@ -161,6 +163,11 @@ def build_tts(use_accel=False, use_torch_compile=False):
 
 
 tts = build_tts(use_accel=cmd_args.accel, use_torch_compile=cmd_args.torch_compile)
+voicepack_builder = VoicePackBuilder(
+    tts,
+    model_dir=cmd_args.model_dir,
+    cfg_path=os.path.join(cmd_args.model_dir, "config.yaml"),
+) if IS_V25 else None
 # 支持的语言列表
 LANGUAGES = {
     "中文": "zh_CN",
@@ -430,6 +437,38 @@ def on_preset_delete(name):
 def update_save_preset_button(prompt_audio):
     """Enable the save button only when a voice reference audio is uploaded."""
     return gr.update(interactive=bool(prompt_audio))
+
+
+def update_export_voicepack_button(prompt_audio):
+    return gr.update(interactive=IS_V25 and bool(prompt_audio))
+
+
+def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
+    """Create a reusable conditioning pack without storing the reference WAV."""
+    if not IS_V25 or voicepack_builder is None:
+        raise gr.Error(i18n("导出音色包仅支持 IndexTTS-2.5"))
+    if not prompt_audio:
+        raise gr.Error(i18n("请先上传音色参考音频"))
+    voice_id = (voice_id or "").strip()
+    display_name = (display_name or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", voice_id):
+        raise gr.Error(i18n("音色 ID 格式无效"))
+    if not display_name:
+        raise gr.Error(i18n("音色名称不能为空"))
+    output_dir = os.path.abspath(os.path.join("outputs", "voicepacks"))
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"{voice_id}.ivp")
+    try:
+        with mutex:
+            path = voicepack_builder.build(
+                prompt_audio,
+                {"voiceId": voice_id, "displayName": display_name, "gender": gender},
+                output_path,
+            )
+    except Exception as exc:
+        print(f"Failed to export voice pack: {exc}")
+        raise gr.Error(f"{i18n('导出音色包失败')}: {exc}") from exc
+    return str(path), f"✅ {i18n('音色包已生成')}：`{path}`"
 
 
 def update_delete_preset_button(preset_name):
@@ -770,9 +809,14 @@ with gr.Blocks(
                     elem_classes=["compact-audio"],
                     elem_id="prompt_audio_compact",
                 )
-                save_preset_btn = gr.Button(
-                    i18n("保存为预设"), interactive=False
-                )
+                with gr.Row():
+                    save_preset_btn = gr.Button(
+                        i18n("保存为预设"), interactive=False
+                    )
+                    if IS_V25:
+                        export_voicepack_btn = gr.Button(
+                            i18n("导出音色包"), interactive=False, variant="secondary"
+                        )
 
             with gr.Column(scale=1):
                 _has_presets = bool(list_presets())
@@ -784,6 +828,29 @@ with gr.Blocks(
                     allow_custom_value=False,
                     interactive=_has_presets,
                 )
+
+        if IS_V25:
+            with gr.Accordion(i18n("音色包信息"), open=False):
+                gr.Markdown(i18n("音色包只保存预计算张量，不包含参考音频。"))
+                with gr.Row():
+                    voicepack_id = gr.Textbox(
+                        label=i18n("音色 ID"),
+                        placeholder="reader-female-01",
+                        info=i18n("仅可使用字母、数字、点、下划线和连字符"),
+                    )
+                    voicepack_name = gr.Textbox(label=i18n("音色名称"), placeholder=i18n("例如：阅读女声"))
+                    voicepack_gender = gr.Dropdown(
+                        choices=[
+                            (i18n("女声"), "female"),
+                            (i18n("男声"), "male"),
+                            (i18n("中性"), "neutral"),
+                            (i18n("未知"), "unknown"),
+                        ],
+                        value="unknown",
+                        label=i18n("性别"),
+                    )
+                voicepack_status = gr.Markdown("")
+                voicepack_download = gr.File(label=i18n("下载音色包"), interactive=False)
 
         # Text input and generation section
         gr.Markdown(f"### {i18n('文本')}")
@@ -1222,6 +1289,18 @@ with gr.Blocks(
         inputs=[prompt_audio],
         outputs=[save_preset_btn]
     )
+
+    if IS_V25:
+        prompt_audio.change(
+            update_export_voicepack_button,
+            inputs=[prompt_audio],
+            outputs=[export_voicepack_btn],
+        )
+        export_voicepack_btn.click(
+            export_voicepack_from_webui,
+            inputs=[prompt_audio, voicepack_id, voicepack_name, voicepack_gender],
+            outputs=[voicepack_download, voicepack_status],
+        )
 
     def on_demo_load():
         """页面加载时重新加载glossary数据并刷新预设列表"""
