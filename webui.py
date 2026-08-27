@@ -979,12 +979,14 @@ with gr.Blocks(
             )
             gr.Markdown(f"### {i18n('当前应用音色包')}")
             with gr.Row(equal_height=False):
-                selected_voicepack = gr.Radio(
+                selected_voicepack = gr.Dropdown(
                     choices=_initial_voicepack_choices,
                     value=_initial_voicepack,
                     label=i18n("选择音色包"),
                     info=i18n("从示例音色包中选择，或拖入自己的 .ivp 音色包"),
                     interactive=bool(_initial_voicepack_choices),
+                    allow_custom_value=False,
+                    multiselect=False,
                     scale=2,
                 )
                 voicepack_import = gr.File(

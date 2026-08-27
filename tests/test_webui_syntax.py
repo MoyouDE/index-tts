@@ -26,6 +26,8 @@ def test_webui_can_install_select_and_synthesize_from_voicepacks():
     assert "当前应用音色包" in source
     assert "import_voicepack_from_webui" in source
     assert "selected_voicepack" in source
+    assert "selected_voicepack = gr.Dropdown(" in source
+    assert "selected_voicepack = gr.Radio(" not in source
     assert 'infer_kwargs["voice_conditioning"] = voice_conditioning' in source
     assert "prebuild_example_voicepacks()" in source
     assert 'pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")' in source
