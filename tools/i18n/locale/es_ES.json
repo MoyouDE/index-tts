@@ -126,5 +126,17 @@
   "音色 ID 格式无效": "ID de voz no válido",
   "音色名称不能为空": "El nombre de voz es obligatorio",
   "导出音色包失败": "Error al exportar el paquete de voz",
-  "音色包已生成": "Paquete de voz creado"
+  "音色包已生成": "Paquete de voz creado",
+  "当前应用音色包": "Paquetes de voz de la aplicación",
+  "选择音色包": "Seleccionar paquete de voz",
+  "选中后直接使用预计算音色，生成时不再读取参考音频": "Usa el condicionamiento de voz precalculado sin leer el audio de referencia al sintetizar.",
+  "拖入 .ivp 音色包以安装并选中": "Arrastra un paquete .ivp para instalarlo y seleccionarlo",
+  "只能选择应用音色包目录内的文件": "Solo se pueden seleccionar archivos del directorio de paquetes de la aplicación",
+  "未选择音色包，将使用上方参考音频": "No hay paquete seleccionado; se usará el audio de referencia superior",
+  "音色包不可用": "Paquete de voz no disponible",
+  "已使用预计算音色，不会重新编码参考音频": "Usando condicionamiento precalculado; no se recodificará el audio de referencia",
+  "音色包已安装并选中": "Paquete de voz instalado y seleccionado",
+  "导入音色包失败": "Error al importar el paquete de voz",
+  "示例音色": "Voz de ejemplo",
+  "请选择音色包或上传音色参考音频": "Selecciona un paquete de voz o carga un audio de referencia"
 }

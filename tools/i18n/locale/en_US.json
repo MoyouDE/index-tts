@@ -126,5 +126,17 @@
   "音色 ID 格式无效": "Invalid voice ID",
   "音色名称不能为空": "Voice name is required",
   "导出音色包失败": "Voice-pack export failed",
-  "音色包已生成": "Voice pack created"
+  "音色包已生成": "Voice pack created",
+  "当前应用音色包": "Application Voice Packs",
+  "选择音色包": "Select a voice pack",
+  "选中后直接使用预计算音色，生成时不再读取参考音频": "Use precomputed voice conditioning without reading reference audio during synthesis.",
+  "拖入 .ivp 音色包以安装并选中": "Drop an .ivp voice pack to install and select it",
+  "只能选择应用音色包目录内的文件": "Only files in the application voice-pack directory can be selected",
+  "未选择音色包，将使用上方参考音频": "No voice pack selected; the reference audio above will be used",
+  "音色包不可用": "Voice pack unavailable",
+  "已使用预计算音色，不会重新编码参考音频": "Using precomputed conditioning; reference audio will not be encoded again",
+  "音色包已安装并选中": "Voice pack installed and selected",
+  "导入音色包失败": "Failed to import voice pack",
+  "示例音色": "Example voice",
+  "请选择音色包或上传音色参考音频": "Select a voice pack or upload reference audio"
 }

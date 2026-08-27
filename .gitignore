@@ -28,6 +28,8 @@ desktop.ini
 /cache/
 /checkpoints*/*
 !/checkpoints*/*.yaml
+# Model repository configs are downloaded alongside weights and remain local.
+/checkpoints*/config.yaml
 /outputs/
 
 # Example audio files (downloaded on demand, not stored in git)

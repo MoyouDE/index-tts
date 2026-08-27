@@ -80,6 +80,12 @@ class VoicePackBuilder:
             )
         return self._tts
 
+    def source_model_fingerprint(self) -> str:
+        """Return and cache the fingerprint used to validate compatible packs."""
+        if self._source_model_fingerprint is None:
+            self._source_model_fingerprint = model_fingerprint(self.model_dir, self.cfg_path)
+        return self._source_model_fingerprint
+
     def build(
         self,
         reference_audio: str | Path,
@@ -95,9 +101,7 @@ class VoicePackBuilder:
 
         tts = self._get_tts()
         tensors = tts.extract_voice_conditioning(str(reference), verbose=False)
-        if self._source_model_fingerprint is None:
-            self._source_model_fingerprint = model_fingerprint(self.model_dir, self.cfg_path)
-        fingerprint = self._source_model_fingerprint
+        fingerprint = self.source_model_fingerprint()
         manifest = {
             "schemaVersion": SCHEMA_VERSION,
             "voiceId": voice_id,

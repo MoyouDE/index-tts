@@ -567,7 +567,8 @@ class IndexTTS2:
     def infer(self, spk_audio_prompt, text, output_path, lang,
               emo_audio_prompt=None, emo_alpha=1.0,
               emo_vector=None, use_emo_text=False, emo_text=None, use_random=False, interval_silence=200,
-              verbose=False, max_text_tokens_per_segment=120, stream_return=False, more_segment_before=0, duration_factor=1.0, text_normalization=True, **generation_kwargs):
+              verbose=False, max_text_tokens_per_segment=120, stream_return=False, more_segment_before=0,
+              duration_factor=1.0, text_normalization=True, voice_conditioning=None, **generation_kwargs):
         if self.low_vram and not stream_return and len(text) > 40:
             segments = self.split_text_by_punctuation(text, max_chars=40)
             if verbose:
@@ -579,7 +580,9 @@ class IndexTTS2:
                     spk_audio_prompt, seg_text, None, lang,
                     emo_audio_prompt, emo_alpha, emo_vector,
                     use_emo_text, emo_text, use_random, 0,
-                    verbose, max_text_tokens_per_segment, False, 0, duration_factor=duration_factor, text_normalization=text_normalization, **generation_kwargs
+                    verbose, max_text_tokens_per_segment, False, 0,
+                    duration_factor=duration_factor, text_normalization=text_normalization,
+                    voice_conditioning=voice_conditioning, **generation_kwargs
                 )
                 result = None
                 for result in gen:
@@ -613,7 +616,9 @@ class IndexTTS2:
                 emo_audio_prompt, emo_alpha,
                 emo_vector,
                 use_emo_text, emo_text, use_random, interval_silence,
-                verbose, max_text_tokens_per_segment, stream_return, more_segment_before, duration_factor=duration_factor, text_normalization=text_normalization, **generation_kwargs
+                verbose, max_text_tokens_per_segment, stream_return, more_segment_before,
+                duration_factor=duration_factor, text_normalization=text_normalization,
+                voice_conditioning=voice_conditioning, **generation_kwargs
             )
         else:
             try:
@@ -622,7 +627,9 @@ class IndexTTS2:
                     emo_audio_prompt, emo_alpha,
                     emo_vector,
                     use_emo_text, emo_text, use_random, interval_silence,
-                    verbose, max_text_tokens_per_segment, stream_return, more_segment_before, duration_factor=duration_factor, text_normalization=text_normalization, **generation_kwargs
+                    verbose, max_text_tokens_per_segment, stream_return, more_segment_before,
+                    duration_factor=duration_factor, text_normalization=text_normalization,
+                    voice_conditioning=voice_conditioning, **generation_kwargs
                 ))[0]
             except IndexError:
                 return None
@@ -631,7 +638,8 @@ class IndexTTS2:
     def infer_generator(self, spk_audio_prompt, text, output_path, lang,
               emo_audio_prompt=None, emo_alpha=1.0, emo_vector=None,
               use_emo_text=False, emo_text=None, use_random=False, interval_silence=200,
-              verbose=False, max_text_tokens_per_segment=120, stream_return=False, quick_streaming_tokens=0, duration_factor=1.0, text_normalization=True, **generation_kwargs):
+              verbose=False, max_text_tokens_per_segment=120, stream_return=False, quick_streaming_tokens=0,
+              duration_factor=1.0, text_normalization=True, voice_conditioning=None, **generation_kwargs):
         print(">> starting inference...")
         self._set_gr_progress(0, "starting inference...")
         if verbose:
@@ -670,7 +678,7 @@ class IndexTTS2:
                 emo_vector = [int(x * emo_vector_scale * 10000) / 10000 for x in emo_vector]
                 print(f"scaled emotion vectors to {emo_vector_scale}x: {emo_vector}")
 
-        if emo_audio_prompt is None:
+        if voice_conditioning is None and emo_audio_prompt is None:
             # we are not using any external "emotion reference voice"; use
             # speaker's voice as the main emotion reference audio.
             emo_audio_prompt = spk_audio_prompt
@@ -678,7 +686,9 @@ class IndexTTS2:
             emo_alpha = 1.0
 
         # 如果参考音频改变了，才需要重新生成, 提升速度
-        if self.cache_spk_cond is None or self.cache_spk_audio_prompt != spk_audio_prompt:
+        if voice_conditioning is None and (
+            self.cache_spk_cond is None or self.cache_spk_audio_prompt != spk_audio_prompt
+        ):
             if self.cache_spk_cond is not None:
                 self.cache_spk_cond = None
                 self.cache_s2mel_style = None
@@ -696,13 +706,13 @@ class IndexTTS2:
             self.cache_s2mel_prompt = prompt_condition
             self.cache_spk_audio_prompt = spk_audio_prompt
             self.cache_mel = ref_mel
-        else:
+        elif voice_conditioning is None:
             style = self.cache_s2mel_style
             prompt_condition = self.cache_s2mel_prompt
             spk_cond_emb = self.cache_spk_cond
             ref_mel = self.cache_mel
 
-        if emo_vector is not None:
+        if voice_conditioning is None and emo_vector is not None:
             weight_vector = torch.tensor(emo_vector, device=self.device)
             if use_random:
                 random_index = [random.randint(0, x - 1) for x in self.emo_num]
@@ -715,11 +725,13 @@ class IndexTTS2:
             emovec_mat = torch.sum(emovec_mat, 0)
             emovec_mat = emovec_mat.unsqueeze(0)
 
-        if emo_audio_prompt == spk_audio_prompt:
+        if voice_conditioning is None and emo_audio_prompt == spk_audio_prompt:
             emo_cond_emb = spk_cond_emb
             self.cache_emo_cond = emo_cond_emb
             self.cache_emo_audio_prompt = emo_audio_prompt
-        elif self.cache_emo_cond is None or self.cache_emo_audio_prompt != emo_audio_prompt:
+        elif voice_conditioning is None and (
+            self.cache_emo_cond is None or self.cache_emo_audio_prompt != emo_audio_prompt
+        ):
             if self.cache_emo_cond is not None:
                 self.cache_emo_cond = None
                 torch.cuda.empty_cache()
@@ -733,8 +745,51 @@ class IndexTTS2:
 
             self.cache_emo_cond = emo_cond_emb
             self.cache_emo_audio_prompt = emo_audio_prompt
-        else:
+        elif voice_conditioning is None:
             emo_cond_emb = self.cache_emo_cond
+
+        if voice_conditioning is not None:
+            required = {
+                "speaker_latent", "base_emotion", "emotion_basis",
+                "prompt_condition", "ref_mel", "speaker_style",
+            }
+            if set(voice_conditioning) != required:
+                raise ValueError("voice_conditioning tensor set does not match the reader ABI")
+            pack_dtype = self.dtype or torch.float32
+            speaker_latent = voice_conditioning["speaker_latent"].to(self.device, dtype=pack_dtype)
+            base_emotion = voice_conditioning["base_emotion"].to(self.device, dtype=pack_dtype)
+            emotion_basis = voice_conditioning["emotion_basis"].to(self.device, dtype=torch.float32)
+            prompt_condition = voice_conditioning["prompt_condition"].to(self.device, dtype=torch.float32)
+            ref_mel = voice_conditioning["ref_mel"].to(self.device, dtype=torch.float32)
+            style = voice_conditioning["speaker_style"].to(self.device, dtype=torch.float32)
+
+            if emo_vector is not None:
+                weight_vector = torch.tensor(emo_vector, device=self.device, dtype=torch.float32)
+                selected_emotion = torch.sum(
+                    weight_vector.unsqueeze(1) * emotion_basis, dim=0, keepdim=True
+                )
+                selected_emotion = selected_emotion + (1 - weight_vector.sum()) * base_emotion
+            elif emo_audio_prompt:
+                emo_audio, _ = self._load_and_cut_audio(emo_audio_prompt, 15, verbose, sr=16000)
+                emo_inputs = self.extract_features(emo_audio, sampling_rate=16000, return_tensors="pt")
+                emo_input_features = emo_inputs["input_features"].to(self.device)
+                emo_attention_mask = emo_inputs["attention_mask"].to(self.device)
+                emo_cond_emb = self.get_emb(emo_input_features, emo_attention_mask)
+                emo_lengths = torch.tensor([emo_cond_emb.shape[-1]], device=self.device)
+                external_emotion = self.gpt.get_emovec(emo_cond_emb, emo_lengths)
+                selected_emotion = base_emotion + max(0.0, min(1.0, emo_alpha)) * (
+                    external_emotion - base_emotion
+                )
+            else:
+                selected_emotion = base_emotion
+
+            first_condition = (speaker_latent + selected_emotion).unsqueeze(1)
+            zeros = torch.zeros(
+                (first_condition.size(0), 2, first_condition.size(2)),
+                device=self.device,
+                dtype=first_condition.dtype,
+            )
+            precomputed_conditioning = torch.cat([first_condition, zeros], dim=1)
 
         self._set_gr_progress(0.1, "text processing...")
         lang_prefix = f'<|{lang.lower()}|> '
@@ -796,39 +851,55 @@ class IndexTTS2:
             m_start_time = time.perf_counter()
             with torch.no_grad():
                 with torch.amp.autocast(text_tokens.device.type, enabled=self.dtype is not None, dtype=self.dtype):
-                    emovec = self.gpt.merge_emovec(
-                        spk_cond_emb,
-                        emo_cond_emb,
-                        torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
-                        torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
-                        alpha=emo_alpha
-                    )
+                    if voice_conditioning is None:
+                        emovec = self.gpt.merge_emovec(
+                            spk_cond_emb,
+                            emo_cond_emb,
+                            torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
+                            torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
+                            alpha=emo_alpha
+                        )
 
-                    if emo_vector is not None:
-                        emovec = emovec_mat + (1 - torch.sum(weight_vector)) * emovec
-                        # emovec = emovec_mat
+                        if emo_vector is not None:
+                            emovec = emovec_mat + (1 - torch.sum(weight_vector)) * emovec
 
-                    codes, speech_conditioning_latent = self.gpt.inference_speech(
-                        spk_cond_emb,
-                        text_tokens,
-                        lang,
-                        emo_cond_emb,
-                        cond_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_cond_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
-                        emo_vec=emovec,
-                        campplus_embedding=style,
-                        wav=spk_audio_prompt,
-                        do_sample=do_sample,
-                        top_p=top_p,
-                        top_k=top_k,
-                        temperature=temperature,
-                        num_return_sequences=autoregressive_batch_size,
-                        length_penalty=length_penalty,
-                        num_beams=num_beams,
-                        repetition_penalty=repetition_penalty,
-                        max_generate_length=max_mel_tokens,
-                        **generation_kwargs
-                    )
+                        codes, _ = self.gpt.inference_speech(
+                            spk_cond_emb,
+                            text_tokens,
+                            lang,
+                            emo_cond_emb,
+                            cond_lengths=torch.tensor([spk_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_cond_lengths=torch.tensor([emo_cond_emb.shape[-1]], device=text_tokens.device),
+                            emo_vec=emovec,
+                            campplus_embedding=style,
+                            wav=spk_audio_prompt,
+                            do_sample=do_sample,
+                            top_p=top_p,
+                            top_k=top_k,
+                            temperature=temperature,
+                            num_return_sequences=autoregressive_batch_size,
+                            length_penalty=length_penalty,
+                            num_beams=num_beams,
+                            repetition_penalty=repetition_penalty,
+                            max_generate_length=max_mel_tokens,
+                            **generation_kwargs
+                        )
+                    else:
+                        codes = self.gpt.inference_speech_from_conditioning(
+                            precomputed_conditioning,
+                            text_tokens,
+                            lang,
+                            do_sample=do_sample,
+                            top_p=top_p,
+                            top_k=top_k,
+                            temperature=temperature,
+                            num_return_sequences=autoregressive_batch_size,
+                            length_penalty=length_penalty,
+                            num_beams=num_beams,
+                            repetition_penalty=repetition_penalty,
+                            max_generate_length=max_mel_tokens,
+                            **generation_kwargs
+                        )
 
                 gpt_gen_time += time.perf_counter() - m_start_time
                 if not has_warned and (codes[:, -1] != self.stop_mel_token).any():

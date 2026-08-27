@@ -2,6 +2,7 @@ import html
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -102,7 +103,7 @@ from tools.i18n.i18n import I18nAuto
 
 if IS_V25:
     from indextts.infer_v2_5 import IndexTTS2
-    from indextts.voicepack import VoicePackBuilder
+    from indextts.voicepack import VoicePackBuilder, load_voicepack
 else:
     from indextts.infer_v2 import IndexTTS2
 
@@ -168,6 +169,9 @@ voicepack_builder = VoicePackBuilder(
     model_dir=cmd_args.model_dir,
     cfg_path=os.path.join(cmd_args.model_dir, "config.yaml"),
 ) if IS_V25 else None
+VOICEPACK_DIR = os.path.abspath(os.path.join("outputs", "voicepacks"))
+os.makedirs(VOICEPACK_DIR, exist_ok=True)
+_voicepack_cache = {}
 # 支持的语言列表
 LANGUAGES = {
     "中文": "zh_CN",
@@ -443,6 +447,136 @@ def update_export_voicepack_button(prompt_audio):
     return gr.update(interactive=IS_V25 and bool(prompt_audio))
 
 
+def _load_current_voicepack(pack_path):
+    """Load a managed pack once, including source-model compatibility checks."""
+    if not IS_V25 or voicepack_builder is None:
+        raise ValueError("Voice packs require IndexTTS-2.5")
+    resolved = os.path.abspath(pack_path)
+    if os.path.commonpath([VOICEPACK_DIR, resolved]) != VOICEPACK_DIR:
+        raise ValueError(i18n("只能选择应用音色包目录内的文件"))
+    stat = os.stat(resolved)
+    cache_key = (resolved, stat.st_mtime_ns, stat.st_size)
+    cached = _voicepack_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    pack = load_voicepack(
+        resolved,
+        expected_model_fingerprint=voicepack_builder.source_model_fingerprint(),
+    )
+    _voicepack_cache.clear()
+    _voicepack_cache[cache_key] = pack
+    return pack
+
+
+def _voicepack_label(pack):
+    gender_labels = {
+        "female": i18n("女声"),
+        "male": i18n("男声"),
+        "neutral": i18n("中性"),
+        "unknown": i18n("未知"),
+    }
+    manifest = pack.manifest
+    return f"{manifest['displayName']} · {manifest['voiceId']} · {gender_labels[manifest['gender']]}"
+
+
+def list_application_voicepacks():
+    """Return valid packs installed in the WebUI-managed application directory."""
+    packs = []
+    for filename in sorted(os.listdir(VOICEPACK_DIR)):
+        if not filename.lower().endswith(".ivp"):
+            continue
+        path = os.path.join(VOICEPACK_DIR, filename)
+        try:
+            pack = _load_current_voicepack(path)
+        except Exception as exc:
+            print(f"Skipping invalid voice pack {path}: {exc}")
+            continue
+        packs.append((pack, path))
+    return packs
+
+
+def voicepack_choices():
+    return [(_voicepack_label(pack), path) for pack, path in list_application_voicepacks()]
+
+
+def format_voicepack_selection(pack_path):
+    if not pack_path:
+        return i18n("未选择音色包，将使用上方参考音频")
+    try:
+        pack = _load_current_voicepack(pack_path)
+    except Exception as exc:
+        return f"❌ {i18n('音色包不可用')}：{exc}"
+    manifest = pack.manifest
+    return (
+        f"✅ **{manifest['displayName']}**  ·  `{manifest['voiceId']}`  ·  "
+        f"{i18n('已使用预计算音色，不会重新编码参考音频')}"
+    )
+
+
+def refresh_voicepack_selector(selected=None, *, select_first=False):
+    choices = voicepack_choices()
+    values = [value for _, value in choices]
+    if selected not in values:
+        selected = values[0] if select_first and values else ""
+    return (
+        gr.update(choices=choices, value=selected, interactive=bool(choices)),
+        format_voicepack_selection(selected),
+    )
+
+
+def import_voicepack_from_webui(uploaded_pack):
+    """Validate, install and select a dropped ``.ivp`` file."""
+    if not uploaded_pack:
+        return (*refresh_voicepack_selector(), gr.update())
+    try:
+        pack = load_voicepack(
+            uploaded_pack,
+            expected_model_fingerprint=voicepack_builder.source_model_fingerprint(),
+        )
+        destination = os.path.join(VOICEPACK_DIR, f"{pack.voice_id}.ivp")
+        source = os.path.abspath(uploaded_pack)
+        if source != destination:
+            temporary = destination + ".importing"
+            try:
+                shutil.copyfile(source, temporary)
+                os.replace(temporary, destination)
+            finally:
+                if os.path.exists(temporary):
+                    os.remove(temporary)
+        _voicepack_cache.clear()
+        selected, details = refresh_voicepack_selector(destination)
+        gr.Info(i18n("音色包已安装并选中"), duration=2)
+        return selected, details, gr.update(value=None)
+    except Exception as exc:
+        print(f"Failed to import voice pack: {exc}")
+        raise gr.Error(f"{i18n('导入音色包失败')}: {exc}") from exc
+
+
+def _example_voicepack(audio_path):
+    stem = os.path.splitext(os.path.basename(audio_path))[0]
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "voice"
+    voice_id = f"example-{safe_stem}"[:64]
+    output_path = os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
+    if os.path.isfile(output_path):
+        try:
+            _load_current_voicepack(output_path)
+            return output_path
+        except Exception:
+            pass
+    with mutex:
+        voicepack_builder.build(
+            audio_path,
+            {
+                "voiceId": voice_id,
+                "displayName": f"{i18n('示例音色')} {stem}",
+                "gender": "unknown",
+            },
+            output_path,
+        )
+    _voicepack_cache.clear()
+    return output_path
+
+
 def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
     """Create a reusable conditioning pack without storing the reference WAV."""
     if not IS_V25 or voicepack_builder is None:
@@ -455,9 +589,7 @@ def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
         raise gr.Error(i18n("音色 ID 格式无效"))
     if not display_name:
         raise gr.Error(i18n("音色名称不能为空"))
-    output_dir = os.path.abspath(os.path.join("outputs", "voicepacks"))
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{voice_id}.ivp")
+    output_path = os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
     try:
         with mutex:
             path = voicepack_builder.build(
@@ -468,7 +600,9 @@ def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
     except Exception as exc:
         print(f"Failed to export voice pack: {exc}")
         raise gr.Error(f"{i18n('导出音色包失败')}: {exc}") from exc
-    return str(path), f"✅ {i18n('音色包已生成')}：`{path}`"
+    _voicepack_cache.clear()
+    selector, details = refresh_voicepack_selector(str(path))
+    return str(path), f"✅ {i18n('音色包已生成')}：`{path}`", selector, details
 
 
 def update_delete_preset_button(preset_name):
@@ -665,7 +799,7 @@ def close_save_preset_modal():
     return gr.update(visible=False)
 
 
-def gen_single(emo_control_method,prompt, text,
+def gen_single(emo_control_method, prompt, selected_voicepack, text,
                lang_choice,
                emo_ref_path, emo_weight,
                vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,
@@ -711,8 +845,17 @@ def gen_single(emo_control_method,prompt, text,
         emo_text = None
 
     print(f"Emo control mode:{emo_control_method},weight:{emo_weight},vec:{vec}")
+    voice_conditioning = None
+    if selected_voicepack:
+        try:
+            voice_conditioning = _load_current_voicepack(selected_voicepack).tensors
+        except Exception as exc:
+            raise gr.Error(f"{i18n('音色包不可用')}：{exc}") from exc
+    elif not prompt:
+        raise gr.Error(i18n("请选择音色包或上传音色参考音频"))
+
     infer_kwargs = dict(
-        spk_audio_prompt=prompt, text=text,
+        spk_audio_prompt=None if voice_conditioning is not None else prompt, text=text,
         output_path=output_path,
         emo_audio_prompt=emo_ref_path, emo_alpha=emo_weight,
         emo_vector=vec,
@@ -724,6 +867,7 @@ def gen_single(emo_control_method,prompt, text,
     )
     if IS_V25:
         infer_kwargs["lang"] = lang_choice or "ZH"
+        infer_kwargs["voice_conditioning"] = voice_conditioning
     output = tts.infer(**infer_kwargs)
     return gr.update(value=output,visible=True)
 
@@ -851,6 +995,32 @@ with gr.Blocks(
                     )
                 voicepack_status = gr.Markdown("")
                 voicepack_download = gr.File(label=i18n("下载音色包"), interactive=False)
+
+            _initial_voicepack_choices = voicepack_choices()
+            _initial_voicepack = _initial_voicepack_choices[0][1] if _initial_voicepack_choices else ""
+            gr.Markdown(f"### {i18n('当前应用音色包')}")
+            with gr.Row(equal_height=False):
+                selected_voicepack = gr.Radio(
+                    choices=_initial_voicepack_choices,
+                    value=_initial_voicepack,
+                    label=i18n("选择音色包"),
+                    info=i18n("选中后直接使用预计算音色，生成时不再读取参考音频"),
+                    interactive=bool(_initial_voicepack_choices),
+                    scale=2,
+                )
+                voicepack_import = gr.File(
+                    label=i18n("拖入 .ivp 音色包以安装并选中"),
+                    file_types=[".ivp"],
+                    type="filepath",
+                    height=110,
+                    scale=1,
+                    elem_id="voicepack_drop",
+                )
+            selected_voicepack_status = gr.Markdown(
+                format_voicepack_selection(_initial_voicepack)
+            )
+        else:
+            selected_voicepack = gr.State(value="")
 
         # Text input and generation section
         gr.Markdown(f"### {i18n('文本')}")
@@ -1097,6 +1267,9 @@ with gr.Blocks(
         # v2.5: also restore the per-example language
         if IS_V25:
             updates.append(gr.update(value=example[14]))
+            pack_path = _example_voicepack(example[0])
+            selector, details = refresh_voicepack_selector(pack_path)
+            updates.extend([selector, details])
         return updates
 
     # click() event works on both desktop and mobile UI
@@ -1108,7 +1281,11 @@ with gr.Blocks(
                                  emo_text,
                                  vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8]
     if IS_V25:
-        example_outputs.append(lang_dropdown)
+        example_outputs.extend([
+            lang_dropdown,
+            selected_voicepack,
+            selected_voicepack_status,
+        ])
     example_table.click(on_example_click,
                         inputs=[example_table],
                         outputs=example_outputs
@@ -1299,13 +1476,31 @@ with gr.Blocks(
         export_voicepack_btn.click(
             export_voicepack_from_webui,
             inputs=[prompt_audio, voicepack_id, voicepack_name, voicepack_gender],
-            outputs=[voicepack_download, voicepack_status],
+            outputs=[
+                voicepack_download,
+                voicepack_status,
+                selected_voicepack,
+                selected_voicepack_status,
+            ],
+        )
+        voicepack_import.upload(
+            import_voicepack_from_webui,
+            inputs=[voicepack_import],
+            outputs=[selected_voicepack, selected_voicepack_status, voicepack_import],
+        )
+        selected_voicepack.change(
+            format_voicepack_selection,
+            inputs=[selected_voicepack],
+            outputs=[selected_voicepack_status],
         )
 
     def on_demo_load():
         """页面加载时重新加载glossary数据并刷新预设列表"""
         if IS_V25 or not hasattr(tts, 'normalizer'):
-            return (gr.update(), *refresh_preset_choices())
+            base = (gr.update(), *refresh_preset_choices())
+            if IS_V25:
+                return (*base, *refresh_voicepack_selector(select_first=True))
+            return base
         try:
             tts.normalizer.load_glossary_from_yaml(tts.glossary_path)
         except Exception as e:
@@ -1322,10 +1517,13 @@ with gr.Blocks(
     )
 
     # 页面加载时重新加载glossary并刷新预设列表
+    _demo_load_outputs = [glossary_table, load_preset_dropdown, manage_preset_dropdown]
+    if IS_V25:
+        _demo_load_outputs.extend([selected_voicepack, selected_voicepack_status])
     demo.load(
         on_demo_load,
         inputs=[],
-        outputs=[glossary_table, load_preset_dropdown, manage_preset_dropdown]
+        outputs=_demo_load_outputs,
     )
 
     # Preset event bindings
@@ -1438,7 +1636,7 @@ with gr.Blocks(
     )
 
     gen_button.click(gen_single,
-                     inputs=[emo_control_method,prompt_audio, input_text_single,
+                     inputs=[emo_control_method, prompt_audio, selected_voicepack, input_text_single,
                             lang_dropdown,
                             emo_upload, emo_weight,
                             vec1, vec2, vec3, vec4, vec5, vec6, vec7, vec8,

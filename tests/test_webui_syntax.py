@@ -19,6 +19,17 @@ def test_webui_exposes_voicepack_export_separately_from_presets():
     assert "VoicePackBuilder" in source
 
 
+def test_webui_can_install_select_and_synthesize_from_voicepacks():
+    webui_path = Path(__file__).resolve().parents[1] / "webui.py"
+    source = webui_path.read_text(encoding="utf-8")
+
+    assert "当前应用音色包" in source
+    assert "import_voicepack_from_webui" in source
+    assert "selected_voicepack" in source
+    assert 'infer_kwargs["voice_conditioning"] = voice_conditioning' in source
+    assert "_example_voicepack(example[0])" in source
+
+
 def test_all_locale_files_are_valid_json():
     locale_dir = Path(__file__).resolve().parents[1] / "tools" / "i18n" / "locale"
     for path in locale_dir.glob("*.json"):
