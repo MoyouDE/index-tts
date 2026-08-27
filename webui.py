@@ -496,7 +496,9 @@ def list_application_voicepacks():
 
 
 def voicepack_choices():
-    return [(_voicepack_label(pack), path) for pack, path in list_application_voicepacks()]
+    return [(i18n("使用上方参考音频（不使用音色包）"), "")] + [
+        (_voicepack_label(pack), path) for pack, path in list_application_voicepacks()
+    ]
 
 
 def format_voicepack_selection(pack_path):
@@ -517,9 +519,9 @@ def refresh_voicepack_selector(selected=None, *, select_first=False):
     choices = voicepack_choices()
     values = [value for _, value in choices]
     if selected not in values:
-        selected = values[0] if select_first and values else ""
+        selected = values[1] if select_first and len(values) > 1 else ""
     return (
-        gr.update(choices=choices, value=selected, interactive=bool(choices)),
+        gr.update(choices=choices, value=selected, interactive=True),
         format_voicepack_selection(selected),
     )
 
@@ -997,7 +999,11 @@ with gr.Blocks(
                 voicepack_download = gr.File(label=i18n("下载音色包"), interactive=False)
 
             _initial_voicepack_choices = voicepack_choices()
-            _initial_voicepack = _initial_voicepack_choices[0][1] if _initial_voicepack_choices else ""
+            _initial_voicepack = (
+                _initial_voicepack_choices[1][1]
+                if len(_initial_voicepack_choices) > 1
+                else ""
+            )
             gr.Markdown(f"### {i18n('当前应用音色包')}")
             with gr.Row(equal_height=False):
                 selected_voicepack = gr.Radio(
@@ -1005,7 +1011,7 @@ with gr.Blocks(
                     value=_initial_voicepack,
                     label=i18n("选择音色包"),
                     info=i18n("选中后直接使用预计算音色，生成时不再读取参考音频"),
-                    interactive=bool(_initial_voicepack_choices),
+                    interactive=True,
                     scale=2,
                 )
                 voicepack_import = gr.File(

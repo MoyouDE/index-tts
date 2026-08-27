@@ -28,6 +28,7 @@ def test_webui_can_install_select_and_synthesize_from_voicepacks():
     assert "selected_voicepack" in source
     assert 'infer_kwargs["voice_conditioning"] = voice_conditioning' in source
     assert "_example_voicepack(example[0])" in source
+    assert "使用上方参考音频（不使用音色包）" in source
 
 
 def test_all_locale_files_are_valid_json():

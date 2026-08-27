@@ -138,5 +138,6 @@
   "音色包已安装并选中": "Paquete de voz instalado y seleccionado",
   "导入音色包失败": "Error al importar el paquete de voz",
   "示例音色": "Voz de ejemplo",
-  "请选择音色包或上传音色参考音频": "Selecciona un paquete de voz o carga un audio de referencia"
+  "请选择音色包或上传音色参考音频": "Selecciona un paquete de voz o carga un audio de referencia",
+  "使用上方参考音频（不使用音色包）": "Usar el audio de referencia superior (sin paquete de voz)"
 }

@@ -138,5 +138,6 @@
   "音色包已安装并选中": "Voice pack installed and selected",
   "导入音色包失败": "Failed to import voice pack",
   "示例音色": "Example voice",
-  "请选择音色包或上传音色参考音频": "Select a voice pack or upload reference audio"
+  "请选择音色包或上传音色参考音频": "Select a voice pack or upload reference audio",
+  "使用上方参考音频（不使用音色包）": "Use the reference audio above (no voice pack)"
 }
