@@ -991,6 +991,7 @@ with gr.Blocks(
                 )
                 voicepack_import = gr.File(
                     label=i18n("拖入 .ivp 音色包以安装并选中"),
+                    show_label=False,
                     file_types=[".ivp"],
                     type="filepath",
                     height=110,
