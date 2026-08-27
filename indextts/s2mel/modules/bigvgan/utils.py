@@ -9,7 +9,8 @@ from torch.nn.utils import weight_norm
 
 matplotlib.use("Agg")
 import matplotlib.pylab as plt
-from .meldataset import MAX_WAV_VALUE
+# Keep inference utilities independent of the training/audio dataset module.
+MAX_WAV_VALUE = 32768.0
 from scipy.io.wavfile import write
 
 

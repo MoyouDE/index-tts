@@ -1,4 +1,5 @@
 import functools
+import sys
 
 import torch
 import torch.nn as nn
@@ -6,7 +7,17 @@ import torch.nn.functional as F
 
 import transformers
 from transformers import GPT2Config, LogitsProcessorList
-from indextts.gpt.transformers_gpt2 import GPT2PreTrainedModel, GPT2Model
+
+# The vendored generation stack probes optional tabular integrations. TTS does not
+# use them, so keep pandas out of the reader process even when it is installed.
+_pandas_was_loaded = "pandas" in sys.modules
+if not _pandas_was_loaded:
+    sys.modules["pandas"] = None
+try:
+    from indextts.gpt.transformers_gpt2 import GPT2PreTrainedModel, GPT2Model
+finally:
+    if not _pandas_was_loaded:
+        sys.modules.pop("pandas", None)
 
 # from transformers import GPT2Config, GPT2PreTrainedModel, LogitsProcessorList
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
@@ -17,7 +28,7 @@ from indextts.gpt.conformer_encoder import ConformerEncoder
 from indextts.gpt.perceiver import PerceiverResampler
 from indextts.utils.arch_util import AttentionBlock
 from indextts.utils.typical_sampling import TypicalLogitsWarper
-from indextts.utils.tokenizer import LANGUAGE_DICT
+from indextts.utils.languages import LANGUAGE_DICT
 
 
 def null_position_embeddings(range, dim):
@@ -309,7 +320,7 @@ class UnifiedVoice(nn.Module):
                  train_solo_embeddings=False, use_mel_codes_as_input=True,
                  checkpointing=True, types=1,
                  condition_num_latent=32, condition_type="perceiver", condition_module=None, emo_condition_module=None, use_accel=False,
-                 spk_cond_mode="conformer"):
+                 spk_cond_mode="conformer", precomputed_conditioning=False):
         """
         Args:
             layers: Number of layers in transformer stack.
@@ -346,50 +357,55 @@ class UnifiedVoice(nn.Module):
         self.mel_length_compression = mel_length_compression
         self.condition_type = condition_type
         self.cond_num = condition_num_latent
-        self.cond_mask_pad = nn.ConstantPad1d((self.cond_num, 0), True)
-        self.emo_cond_mask_pad = nn.ConstantPad1d((1, 0), True)
         self.spk_cond_mode = spk_cond_mode
-        if spk_cond_mode == "campplus":
-            self.spk_emb_proj = nn.Linear(192, model_dim)
-        else:
-            if condition_type == "perceiver":
-                self.conditioning_encoder = ConditioningEncoder(1024, model_dim, num_attn_heads=heads)
-                self.perceiver_encoder = PerceiverResampler(model_dim, dim_context=model_dim, num_latents=self.cond_num)
-            elif condition_type == "conformer_perceiver" or condition_type == "conformer_encoder":
-                self.conditioning_encoder = ConformerEncoder(input_size=1024,
-                                                             output_size=condition_module['output_size'],
-                                                             linear_units=condition_module['linear_units'],
-                                                             attention_heads=condition_module['attention_heads'],
-                                                             num_blocks=condition_module['num_blocks'],
-                                                             input_layer=condition_module['input_layer'])
-                if condition_type == "conformer_perceiver":
-                    self.perceiver_encoder = PerceiverResampler(model_dim, dim_context=condition_module['output_size'],
-                                                                ff_mult=condition_module['perceiver_mult'],
-                                                                heads=condition_module['attention_heads'],
-                                                                num_latents=self.cond_num)
+        self.precomputed_conditioning = precomputed_conditioning
+        if precomputed_conditioning and spk_cond_mode != "campplus":
+            raise ValueError("precomputed conditioning currently requires campplus mode")
+        if not precomputed_conditioning:
+            self.cond_mask_pad = nn.ConstantPad1d((self.cond_num, 0), True)
+            self.emo_cond_mask_pad = nn.ConstantPad1d((1, 0), True)
+            if spk_cond_mode == "campplus":
+                self.spk_emb_proj = nn.Linear(192, model_dim)
             else:
-                self.conditioning_encoder = ConditioningEncoder(1024, model_dim, num_attn_heads=heads, mean=True)
-            self.speed_emb = nn.Embedding(2, model_dim)
-            self.speed_emb.weight.data.normal_(mean=0.0, std=0.0)
+                if condition_type == "perceiver":
+                    self.conditioning_encoder = ConditioningEncoder(1024, model_dim, num_attn_heads=heads)
+                    self.perceiver_encoder = PerceiverResampler(model_dim, dim_context=model_dim, num_latents=self.cond_num)
+                elif condition_type == "conformer_perceiver" or condition_type == "conformer_encoder":
+                    self.conditioning_encoder = ConformerEncoder(input_size=1024,
+                                                                 output_size=condition_module['output_size'],
+                                                                 linear_units=condition_module['linear_units'],
+                                                                 attention_heads=condition_module['attention_heads'],
+                                                                 num_blocks=condition_module['num_blocks'],
+                                                                 input_layer=condition_module['input_layer'])
+                    if condition_type == "conformer_perceiver":
+                        self.perceiver_encoder = PerceiverResampler(model_dim, dim_context=condition_module['output_size'],
+                                                                    ff_mult=condition_module['perceiver_mult'],
+                                                                    heads=condition_module['attention_heads'],
+                                                                    num_latents=self.cond_num)
+                else:
+                    self.conditioning_encoder = ConditioningEncoder(1024, model_dim, num_attn_heads=heads, mean=True)
+                self.speed_emb = nn.Embedding(2, model_dim)
+                self.speed_emb.weight.data.normal_(mean=0.0, std=0.0)
 
-        self.emo_conditioning_encoder = ConformerEncoder(input_size=1024,
-                                                         output_size=emo_condition_module['output_size'],
-                                                         linear_units=emo_condition_module['linear_units'],
-                                                         attention_heads=emo_condition_module['attention_heads'],
-                                                         num_blocks=emo_condition_module['num_blocks'],
-                                                         input_layer=emo_condition_module['input_layer'])
-        self.emo_perceiver_encoder = PerceiverResampler(1024, dim_context=emo_condition_module['output_size'],
-                                                            ff_mult=emo_condition_module['perceiver_mult'],
-                                                            heads=emo_condition_module['attention_heads'],
-                                                            num_latents=1)
+            self.emo_conditioning_encoder = ConformerEncoder(input_size=1024,
+                                                             output_size=emo_condition_module['output_size'],
+                                                             linear_units=emo_condition_module['linear_units'],
+                                                             attention_heads=emo_condition_module['attention_heads'],
+                                                             num_blocks=emo_condition_module['num_blocks'],
+                                                             input_layer=emo_condition_module['input_layer'])
+            self.emo_perceiver_encoder = PerceiverResampler(1024, dim_context=emo_condition_module['output_size'],
+                                                                ff_mult=emo_condition_module['perceiver_mult'],
+                                                                heads=emo_condition_module['attention_heads'],
+                                                                num_latents=1)
 
 
 
         self.text_embedding = nn.Embedding(self.number_text_tokens * types + 1, model_dim)
         if spk_cond_mode == "campplus":
             self.lang_embedding = nn.Embedding(len(LANGUAGE_DICT) + 1, model_dim)
-        self.emo_layer = nn.Linear(model_dim, model_dim)
-        self.emovec_layer = nn.Linear(1024, model_dim)
+        if not precomputed_conditioning:
+            self.emo_layer = nn.Linear(model_dim, model_dim)
+            self.emovec_layer = nn.Linear(1024, model_dim)
 
         if use_mel_codes_as_input:
             self.mel_embedding = nn.Embedding(self.number_mel_codes, model_dim)
@@ -406,7 +422,8 @@ class UnifiedVoice(nn.Module):
             self.text_solo_embedding = 0
 
         self.final_norm = nn.LayerNorm(model_dim)
-        self.text_head = nn.Linear(model_dim, self.number_text_tokens * types + 1)
+        if not precomputed_conditioning:
+            self.text_head = nn.Linear(model_dim, self.number_text_tokens * types + 1)
         self.mel_head = nn.Linear(model_dim, self.number_mel_codes)
 
         # Initialize the embeddings per the GPT-2 scheme
@@ -823,6 +840,81 @@ class UnifiedVoice(nn.Module):
         # GenerateOutput
         output.sequences = output.sequences[:, trunc_index:]
         return output, speech_conditioning_latent
+
+    def inference_speech_from_conditioning(
+        self,
+        conditional_latents,
+        text_inputs,
+        langs=None,
+        input_tokens=None,
+        num_return_sequences=1,
+        max_generate_length=None,
+        typical_sampling=False,
+        typical_mass=.9,
+        **hf_generate_kwargs,
+    ):
+        """Generate semantic tokens from an already projected voice-pack latent."""
+        input_ids, inputs_embeds, attention_mask = self.prepare_gpt_inputs(
+            conditional_latents, text_inputs, langs
+        )
+        self.inference_model.store_mel_emb(inputs_embeds)
+        if input_tokens is None:
+            inputs = input_ids
+        else:
+            if input_tokens.ndim == 1:
+                input_tokens = input_tokens.unsqueeze(0)
+            if num_return_sequences % input_tokens.shape[0] != 0:
+                raise ValueError("num_return_sequences must be divisible by input_tokens batch size")
+            if num_return_sequences % text_inputs.shape[0] != 0:
+                raise ValueError("num_return_sequences must be divisible by text_inputs batch size")
+            repeats = num_return_sequences // input_ids.shape[0]
+            if repeats > 1:
+                input_ids = input_ids.repeat(repeats, 1)
+                attention_mask = attention_mask.repeat(repeats, 1)
+            input_tokens = input_tokens.repeat(num_return_sequences // input_tokens.shape[0], 1)
+            inputs = torch.cat([input_ids, input_tokens], dim=1)
+            attention_mask = F.pad(attention_mask, (0, input_tokens.shape[1]), value=1)
+
+        trunc_index = inputs.shape[1]
+        logits_processor = LogitsProcessorList()
+        if typical_sampling:
+            if not 0.0 < typical_mass < 1.0:
+                raise ValueError("typical_mass must be between zero and one")
+            min_tokens = 2 if hf_generate_kwargs.get("num_beams", 1) > 1 else 1
+            logits_processor.append(TypicalLogitsWarper(mass=typical_mass, min_tokens_to_keep=min_tokens))
+        max_length = (
+            trunc_index + self.max_mel_tokens - 1
+            if max_generate_length is None
+            else trunc_index + max_generate_length
+        )
+
+        if self.accel_engine is not None and num_return_sequences == 1:
+            output = self.accel_engine.generate(
+                inputs,
+                max_new_tokens=max_length - trunc_index,
+                attention_mask=attention_mask,
+                temperature=hf_generate_kwargs.get("temperature", 1),
+                stop_tokens=[self.stop_mel_token],
+                tts_embeddings=inputs_embeds,
+                tts_mel_embedding=self.inference_model.embeddings,
+                tts_text_pos_embedding=self.inference_model.text_pos_embedding,
+            )
+        else:
+            output = self.inference_model.generate(
+                inputs,
+                bos_token_id=self.start_mel_token,
+                pad_token_id=self.stop_mel_token,
+                eos_token_id=self.stop_mel_token,
+                attention_mask=attention_mask,
+                max_length=max_length,
+                logits_processor=logits_processor,
+                num_return_sequences=num_return_sequences,
+                **hf_generate_kwargs,
+            )
+        if isinstance(output, torch.Tensor):
+            return output[:, trunc_index:]
+        output.sequences = output.sequences[:, trunc_index:]
+        return output
 
     def get_emovec(self, emo_speech_conditioning_latent, emo_cond_lengths):
         emo_vec_syn_ori = self.get_emo_conditioning(emo_speech_conditioning_latent.transpose(1,2), emo_cond_lengths)

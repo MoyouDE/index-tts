@@ -435,8 +435,10 @@ class IndexTTS2:
         )[0]
 
         cond_lengths = torch.tensor([spk_cond_emb.shape[-1]], device=self.device)
-        base_emotion = self.gpt.get_emovec(spk_cond_emb, cond_lengths)
-        speaker_latent = self.gpt.spk_emb_proj(style)
+        device_type = torch.device(self.device).type
+        with torch.amp.autocast(device_type, enabled=self.dtype is not None, dtype=self.dtype):
+            base_emotion = self.gpt.get_emovec(spk_cond_emb, cond_lengths)
+            speaker_latent = self.gpt.spk_emb_proj(style)
         basis_indexes = [find_most_similar_cosine(style, matrix) for matrix in self.spk_matrix]
         emotion_basis = torch.cat(
             [matrix[index].unsqueeze(0) for index, matrix in zip(basis_indexes, self.emo_matrix)], dim=0
@@ -816,7 +818,7 @@ class IndexTTS2:
                         emo_vec=emovec,
                         campplus_embedding=style,
                         wav=spk_audio_prompt,
-                        do_sample=True,
+                        do_sample=do_sample,
                         top_p=top_p,
                         top_k=top_k,
                         temperature=temperature,
