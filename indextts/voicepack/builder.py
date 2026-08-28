@@ -57,7 +57,7 @@ class VoicePackBuilder:
         model_dir: str | Path = "checkpoints",
         cfg_path: str | Path | None = None,
         device: str | None = None,
-        use_bf16: bool = True,
+        use_bf16: bool = False,
         source_model_fingerprint: str | None = None,
     ) -> None:
         self._tts = tts

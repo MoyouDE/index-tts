@@ -69,7 +69,7 @@ class JsonlSidecar:
                     result = self.runtime.synthesize(
                         params["text"],
                         params["voiceId"],
-                        params.get("emotion", "auto"),
+                        params.get("emotion", "base"),
                         params.get("durationFactor", 1.0),
                         _cancelled=task.cancelled.is_set,
                     )
@@ -92,6 +92,22 @@ class JsonlSidecar:
             raise ValueError(f"synthesize 含不允许的参数: {', '.join(sorted(unknown))}")
         if not isinstance(params.get("text"), str) or not isinstance(params.get("voiceId"), str):
             raise ValueError("synthesize 需要 text 和 voiceId")
+        emotion = params.get("emotion", "base")
+        if isinstance(emotion, str):
+            if emotion not in {"base", "auto"}:
+                raise ValueError("emotion 字符串只能是 base 或 auto")
+            if emotion == "auto" and self.runtime.emotion_provider is None:
+                raise ValueError("未配置自动情感后端，不能使用 emotion=auto")
+        elif isinstance(emotion, list):
+            if len(emotion) != 8 or any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                for value in emotion
+            ):
+                raise ValueError("emotion 显式向量必须包含 8 个数值")
+            if any(not 0.0 <= float(value) <= 1.2 for value in emotion):
+                raise ValueError("emotion 显式向量分量必须位于 [0, 1.2]")
+        else:
+            raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
         task = _Task(request_id=request_id, params=params, cancelled=threading.Event())
         with self._tasks_lock:
             if request_id in self._tasks:

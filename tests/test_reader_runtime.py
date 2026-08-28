@@ -1,11 +1,14 @@
+import hashlib
 import io
 import json
 import subprocess
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
+import torch
 
 from indextts.gpt.model_v2 import UnifiedVoice
 from indextts.runtime.emotion import (
@@ -14,7 +17,14 @@ from indextts.runtime.emotion import (
     QwenEmotionProvider,
     normalize_emotion,
 )
-from indextts.runtime.engine import SynthesisCancelled
+from indextts.runtime.engine import ReaderRuntime, SynthesisCancelled
+from indextts.runtime.model_export import (
+    CORE_FILES,
+    RUNTIME_ABI,
+    RUNTIME_CAPABILITIES,
+    RUNTIME_PRECISION,
+    verify_runtime_model,
+)
 from indextts.runtime.sidecar import JsonlSidecar
 
 
@@ -44,12 +54,79 @@ def test_slim_gpt_omits_reference_conditioners_and_text_head():
     assert "mel_head.weight" in keys
 
 
+def test_runtime_model_rejects_non_quality_precision_manifest(tmp_path):
+    empty_digest = hashlib.sha256(b"").hexdigest()
+    for name in CORE_FILES:
+        (tmp_path / name).write_bytes(b"")
+    manifest = {
+        "runtimeAbi": RUNTIME_ABI,
+        "capabilities": RUNTIME_CAPABILITIES,
+        "precision": {**RUNTIME_PRECISION, "gpt": "bfloat16"},
+        "coreModelBytes": 0,
+        "files": {
+            name: {"sha256": empty_digest, "bytes": 0}
+            for name in CORE_FILES
+        },
+    }
+    (tmp_path / "runtime_model.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="质量优先运行时要求 FP32 GPT"):
+        verify_runtime_model(tmp_path)
+
+
 def test_emotion_normalization_applies_bias_and_caps_total():
     vector = normalize_emotion([1.0] * 8)
     assert len(vector) == 8
     assert sum(vector) == pytest.approx(0.8)
     assert vector[2] > vector[6]
     assert ExplicitEmotionProvider([0, 0, 0, 0, 0, 0, 0, 0]).analyze("任意") == CALM_VECTOR
+
+
+def test_reader_runtime_defaults_to_voicepack_base_emotion_and_preserves_zero_vector():
+    runtime = ReaderRuntime.__new__(ReaderRuntime)
+    runtime.emotion_provider = None
+
+    vector, mode, warnings = runtime._emotion_vector("任意文本", "base")
+    assert vector is None
+    assert mode == "base"
+    assert warnings == []
+
+    vector, mode, warnings = runtime._emotion_vector("任意文本", [0.0] * 8)
+    assert vector == [0.0] * 8
+    assert mode == "explicit"
+    assert warnings == []
+
+    with pytest.raises(ValueError, match="未配置自动情感后端"):
+        runtime._emotion_vector("任意文本", "auto")
+
+
+def test_voice_condition_blends_explicit_basis_without_dropping_base_emotion():
+    runtime = ReaderRuntime.__new__(ReaderRuntime)
+    runtime.device = torch.device("cpu")
+    runtime.dtype = torch.float32
+    speaker = torch.tensor([[1.0, 2.0]])
+    base = torch.tensor([[0.2, 0.4]])
+    basis = torch.zeros((8, 2))
+    basis[0] = torch.tensor([1.0, 1.5])
+    runtime._voices = {
+        "voice": SimpleNamespace(
+            tensors={
+                "speaker_latent": speaker,
+                "base_emotion": base,
+                "emotion_basis": basis,
+                "prompt_condition": torch.zeros((1, 2, 3)),
+                "ref_mel": torch.zeros((1, 4, 3)),
+                "speaker_style": torch.zeros((1, 5)),
+            }
+        )
+    }
+
+    base_condition, *_ = runtime._voice_condition("voice", None)
+    assert torch.equal(base_condition[:, 0], speaker + base)
+
+    explicit_condition, *_ = runtime._voice_condition("voice", [0.5, 0, 0, 0, 0, 0, 0, 0])
+    expected_emotion = 0.5 * basis[0].unsqueeze(0) + 0.5 * base
+    assert torch.equal(explicit_condition[:, 0], speaker + expected_emotion)
 
 
 def test_qwen_failure_falls_back_to_calm_without_cuda(monkeypatch, tmp_path):
@@ -97,8 +174,10 @@ print(json.dumps(sorted(forbidden.intersection(sys.modules))))
 
 class _FakeRuntime:
     def __init__(self):
+        self.emotion_provider = None
         self.started = threading.Event()
         self.release = threading.Event()
+        self.emotions = []
 
     def health(self):
         print("model diagnostic must go to stderr")
@@ -111,6 +190,7 @@ class _FakeRuntime:
         return self.list_voices()
 
     def synthesize(self, text, voice_id, emotion, duration_factor, _cancelled):
+        self.emotions.append(emotion)
         self.started.set()
         while not self.release.wait(0.01):
             if _cancelled():
@@ -134,6 +214,8 @@ class _ProtocolInput:
         self.runtime.release.set()
         time.sleep(0.05)
         yield json.dumps({"id": "bad", "method": "synthesize", "params": {"text": "丙", "voiceId": "voice-1", "outputPath": "C:/escape.wav"}}) + "\n"
+        yield json.dumps({"id": "auto", "method": "synthesize", "params": {"text": "丁", "voiceId": "voice-1", "emotion": "auto"}}) + "\n"
+        yield json.dumps({"id": "vector", "method": "synthesize", "params": {"text": "戊", "voiceId": "voice-1", "emotion": [0, 0]}}) + "\n"
         yield json.dumps({"id": "unknown", "method": "missing", "params": {}}) + "\n"
         yield json.dumps({"id": "stop", "method": "shutdown", "params": {}}) + "\n"
 
@@ -152,7 +234,10 @@ def test_jsonl_protocol_serializes_gpu_work_cancels_queue_and_keeps_stdout_clean
     assert by_id["cancel"]["result"]["cancelled"] is True
     assert by_id["second"]["error"]["code"] == "cancelled"
     assert by_id["bad"]["error"]["code"] == "invalid_request"
+    assert by_id["auto"]["error"]["code"] == "invalid_request"
+    assert by_id["vector"]["error"]["code"] == "invalid_request"
     assert by_id["unknown"]["error"]["code"] == "method_not_found"
     assert all(set(response) >= {"id", "ok"} for response in responses)
     assert "diagnostic" not in stdout.getvalue()
     assert "stderr" in stderr.getvalue()
+    assert runtime.emotions[0] == "base"

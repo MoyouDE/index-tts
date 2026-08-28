@@ -27,7 +27,7 @@ def _parser() -> argparse.ArgumentParser:
     serve.add_argument("--voice-dir", action="append", required=True)
     serve.add_argument("--cache-dir", required=True)
     serve.add_argument("--device", default="cuda:0")
-    serve.add_argument("--emotion-backend", choices=["qwen", "explicit"], default="qwen")
+    serve.add_argument("--emotion-backend", choices=["none", "qwen", "explicit"], default="none")
     serve.add_argument("--qwen-model-dir")
     return parser
 
@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
             "totalVramBytes": torch.cuda.get_device_properties(device).total_memory,
             "coreModelBytes": manifest["coreModelBytes"],
             "sourceModelFingerprint": manifest["sourceModelFingerprint"],
+            "precision": manifest["precision"],
+            "capabilities": manifest["capabilities"],
         }
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
@@ -65,7 +67,9 @@ def main(argv: list[str] | None = None) -> int:
         from .engine import ReaderRuntime
         from .sidecar import JsonlSidecar
 
-        if args.emotion_backend == "qwen":
+        if args.emotion_backend == "none":
+            provider = None
+        elif args.emotion_backend == "qwen":
             if not args.qwen_model_dir:
                 raise ValueError("emotion-backend=qwen 时必须提供 --qwen-model-dir")
             provider = QwenEmotionProvider(args.qwen_model_dir)

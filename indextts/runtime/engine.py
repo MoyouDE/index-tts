@@ -68,7 +68,10 @@ class ReaderRuntime:
         self.manifest = verify_runtime_model(self.model_dir)
         self.source_fingerprint = self.manifest["sourceModelFingerprint"]
         self.cfg = OmegaConf.load(self.model_dir / "config.yaml")
-        self.dtype = torch.bfloat16
+        self.dtype = torch.float32
+        torch.set_float32_matmul_precision("highest")
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
         self.stop_mel_token = int(self.cfg.gpt.stop_mel_token)
         self._synthesis_lock = threading.Lock()
         self._voices: dict[str, Any] = {}
@@ -84,8 +87,8 @@ class ReaderRuntime:
             precomputed_conditioning=True,
         )
         self.gpt.load_state_dict(load_file(self.model_dir / "gpt.safetensors"), strict=True)
-        self.gpt = self.gpt.to(self.device).eval().bfloat16()
-        self.gpt.post_init_gpt2_config(use_deepspeed=False, kv_cache=True, half=True)
+        self.gpt = self.gpt.to(self.device).eval().float()
+        self.gpt.post_init_gpt2_config(use_deepspeed=False, kv_cache=True, half=False)
 
         self.semantic_codec = SemanticCodecDecoder(**self.cfg.semantic_codec, cfg=self.cfg.semantic_codec)
         self.semantic_codec.load_state_dict(load_file(self.model_dir / "codec.safetensors"), strict=True)
@@ -148,30 +151,44 @@ class ReaderRuntime:
             "gpu": torch.cuda.get_device_name(self.device),
             "voiceCount": len(self._voices),
             "runtimeAbi": self.manifest["runtimeAbi"],
+            "precision": self.manifest["precision"],
+            "capabilities": self.manifest["capabilities"],
+            "float32MatmulPrecision": torch.get_float32_matmul_precision(),
+            "tf32MatmulEnabled": torch.backends.cuda.matmul.allow_tf32,
+            "tf32CudnnEnabled": torch.backends.cudnn.allow_tf32,
+            "cudaMemoryAllocatedBytes": torch.cuda.memory_allocated(self.device),
+            "cudaMemoryReservedBytes": torch.cuda.memory_reserved(self.device),
+            "peakCudaMemoryAllocatedBytes": torch.cuda.max_memory_allocated(self.device),
+            "peakCudaMemoryReservedBytes": torch.cuda.max_memory_reserved(self.device),
         }
 
     def _cancel_boundary(self, cancelled: Callable[[], bool] | None) -> None:
         if cancelled is not None and cancelled():
             raise SynthesisCancelled("合成已取消")
 
-    def _emotion_vector(self, text: str, emotion: str | Sequence[float]) -> tuple[list[float], list[str]]:
+    def _emotion_vector(
+        self,
+        text: str,
+        emotion: str | Sequence[float],
+    ) -> tuple[list[float] | None, str, list[str]]:
         warnings: list[str] = []
+        if emotion == "base":
+            return None, "base", warnings
         if emotion == "auto":
             if self.emotion_provider is None:
-                warnings.append("未配置自动情感后端，已回退 calm")
-                return CALM_VECTOR.copy(), warnings
+                raise ValueError("未配置自动情感后端，不能使用 emotion=auto")
             try:
                 vector = self.emotion_provider.analyze(text)
                 warning = getattr(self.emotion_provider, "warning", None)
                 if warning:
                     warnings.append(warning)
-                return normalize_emotion(vector, apply_bias=False), warnings
+                return normalize_emotion(vector, apply_bias=False), "auto", warnings
             except Exception as exc:
                 warnings.append(f"自动情感分析失败，已回退 calm: {exc}")
-                return CALM_VECTOR.copy(), warnings
+                return CALM_VECTOR.copy(), "auto", warnings
         if isinstance(emotion, str):
-            raise ValueError("emotion 只能是 auto 或 8 维显式向量")
-        return normalize_emotion(emotion), warnings
+            raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
+        return normalize_emotion(emotion, fallback_to_calm=False), "explicit", warnings
 
     def _prepare_segments(self, text: str) -> list[torch.Tensor]:
         text = self.text_process.clean_pattern.sub(lambda match: self.text_process.char_rep_map[match.group()], text)
@@ -192,19 +209,21 @@ class ReaderRuntime:
             tokens.append(F.pad(tensor, (0, 1), value=1))
         return tokens
 
-    def _voice_condition(self, voice_id: str, vector: Sequence[float]):
+    def _voice_condition(self, voice_id: str, vector: Sequence[float] | None):
         if voice_id not in self._voices:
             raise KeyError(f"未知音色: {voice_id}")
         tensors = self._voices[voice_id].tensors
         speaker = tensors["speaker_latent"].to(self.device, dtype=self.dtype)
         base = tensors["base_emotion"].to(self.device, dtype=self.dtype)
-        # Match the full inference path exactly: selected emotion bases and
-        # weights are FP32, while the encoded base emotion and speaker projection
-        # are BF16. The promotion to FP32 here prevents late autoregressive drift.
-        basis = tensors["emotion_basis"].to(self.device, dtype=torch.float32)
-        weights = torch.tensor(vector, device=self.device, dtype=torch.float32)
-        emotion = torch.sum(weights.unsqueeze(1) * basis, dim=0, keepdim=True)
-        emotion = emotion + (1 - weights.sum()) * base
+        # The quality profile keeps all voice conditioning math in FP32. Packs
+        # produced by the quality-first builder also persist these tensors as FP32.
+        if vector is None:
+            emotion = base
+        else:
+            basis = tensors["emotion_basis"].to(self.device, dtype=torch.float32)
+            weights = torch.tensor(vector, device=self.device, dtype=torch.float32)
+            emotion = torch.sum(weights.unsqueeze(1) * basis, dim=0, keepdim=True)
+            emotion = emotion + (1 - weights.sum()) * base
         first = (speaker + emotion).unsqueeze(1)
         zeros = torch.zeros((1, 2, first.shape[-1]), device=self.device, dtype=first.dtype)
         return (
@@ -218,7 +237,7 @@ class ReaderRuntime:
         self,
         text: str,
         voice_id: str,
-        emotion: str | Sequence[float] = "auto",
+        emotion: str | Sequence[float] = "base",
         duration_factor: float = 1.0,
         *,
         _cancelled: Callable[[], bool] | None = None,
@@ -234,7 +253,7 @@ class ReaderRuntime:
             try:
                 self._cancel_boundary(_cancelled)
                 stage = time.perf_counter()
-                vector, warnings = self._emotion_vector(text, emotion)
+                vector, emotion_mode, warnings = self._emotion_vector(text, emotion)
                 timings["emotionMs"] = (time.perf_counter() - stage) * 1000
                 self._cancel_boundary(_cancelled)
 
@@ -248,7 +267,7 @@ class ReaderRuntime:
                 for index, text_tokens in enumerate(segments):
                     self._cancel_boundary(_cancelled)
                     stage = time.perf_counter()
-                    with torch.no_grad(), torch.amp.autocast("cuda", dtype=self.dtype):
+                    with torch.no_grad():
                         codes = self.gpt.inference_speech_from_conditioning(
                             conditional,
                             text_tokens,
@@ -325,6 +344,7 @@ class ReaderRuntime:
                     "audioPath": str(output),
                     "sampleRate": self.sample_rate,
                     "durationMs": duration_ms,
+                    "emotionMode": emotion_mode,
                     "emotionVector": vector,
                     "timings": {key: round(value, 2) for key, value in timings.items()},
                     "warnings": warnings,

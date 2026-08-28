@@ -23,7 +23,12 @@ EMOTION_BIAS = [0.9375, 0.875, 1.0, 1.0, 0.9375, 0.9375, 0.6875, 0.5625]
 CALM_VECTOR = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8]
 
 
-def normalize_emotion(vector: Sequence[float], *, apply_bias: bool = True) -> list[float]:
+def normalize_emotion(
+    vector: Sequence[float],
+    *,
+    apply_bias: bool = True,
+    fallback_to_calm: bool = True,
+) -> list[float]:
     if len(vector) != 8:
         raise ValueError("情感向量必须正好包含 8 个数值")
     normalized = []
@@ -35,7 +40,7 @@ def normalize_emotion(vector: Sequence[float], *, apply_bias: bool = True) -> li
     total = sum(normalized)
     if total > 0.8:
         normalized = [value * 0.8 / total for value in normalized]
-    if not any(normalized):
+    if fallback_to_calm and not any(normalized):
         return CALM_VECTOR.copy()
     return normalized
 

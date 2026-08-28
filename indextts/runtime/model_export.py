@@ -16,9 +16,23 @@ from safetensors.torch import save_file
 from indextts.voicepack.builder import model_fingerprint
 
 
-RUNTIME_ABI = "indextts2.5-reader-runtime-v1"
-MAX_CORE_MODEL_BYTES = int(2.2 * 1024**3)
+RUNTIME_ABI = "indextts2.5-reader-runtime-v2"
+MAX_CORE_MODEL_BYTES = int(3.2 * 1024**3)
 CORE_FILES = ["gpt.safetensors", "s2mel.safetensors", "codec.safetensors", "bigvgan.safetensors"]
+RUNTIME_PRECISION = {
+    "gpt": "float32",
+    "s2mel": "float32",
+    "codec": "float32",
+    "bigvgan": "float32",
+    "float32Matmul": "ieee",
+}
+RUNTIME_CAPABILITIES = {
+    "languages": ["zh"],
+    "sampleRate": 22050,
+    "requiresVoicePack": True,
+    "emotionModes": ["base", "explicit"],
+    "automaticEmotionIncluded": False,
+}
 
 
 def _sha256_file(path: Path) -> str:
@@ -67,7 +81,7 @@ def export_runtime_model(
         "final_norm.",
     )
     gpt_tensors = {
-        key: value.to(torch.bfloat16) if value.is_floating_point() else value
+        key: value.float() if value.is_floating_point() else value
         for key, value in gpt_source.items()
         if key.startswith(gpt_prefixes)
     }
@@ -112,7 +126,7 @@ def export_runtime_model(
 
     core_bytes = sum((output / name).stat().st_size for name in CORE_FILES)
     if core_bytes > MAX_CORE_MODEL_BYTES:
-        raise RuntimeError(f"裁剪后的核心模型超过 2.2 GiB: {core_bytes} bytes")
+        raise RuntimeError(f"质量优先核心模型超过 3.2 GiB: {core_bytes} bytes")
     files = {
         path.name: {"sha256": _sha256_file(path), "bytes": path.stat().st_size}
         for path in sorted(output.iterdir())
@@ -123,7 +137,8 @@ def export_runtime_model(
         "runtimeAbi": RUNTIME_ABI,
         "indexTtsVersion": str(getattr(cfg, "version", "2.5")),
         "sourceModelFingerprint": model_fingerprint(source, config),
-        "precision": {"gpt": "bfloat16", "s2mel": "float32", "codec": "float32", "bigvgan": "float32"},
+        "precision": RUNTIME_PRECISION,
+        "capabilities": RUNTIME_CAPABILITIES,
         "coreModelBytes": core_bytes,
         "files": files,
         "license": "bilibili Model Use License",
@@ -141,6 +156,10 @@ def verify_runtime_model(model_dir: str | Path) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("runtimeAbi") != RUNTIME_ABI:
         raise ValueError("运行时 ABI 不匹配")
+    if manifest.get("capabilities") != RUNTIME_CAPABILITIES:
+        raise ValueError("运行时能力声明不匹配")
+    if manifest.get("precision") != RUNTIME_PRECISION:
+        raise ValueError("运行时精度声明不匹配，质量优先运行时要求 FP32 GPT 和 IEEE FP32 矩阵计算")
     for name, spec in manifest["files"].items():
         path = root / name
         if not path.is_file() or path.stat().st_size != spec["bytes"] or _sha256_file(path) != spec["sha256"]:
