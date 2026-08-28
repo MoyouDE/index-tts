@@ -171,6 +171,13 @@ voicepack_builder = VoicePackBuilder(
 ) if IS_V25 else None
 VOICEPACK_DIR = os.path.abspath(os.path.join("outputs", "voicepacks"))
 os.makedirs(VOICEPACK_DIR, exist_ok=True)
+DEFAULT_VOICEPACK_EXPORT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "index-tts-package", "SoundPackage")
+)
+VOICEPACK_EXPORT_DIR = os.path.abspath(
+    os.environ.get("INDEXTTS_VOICEPACK_EXPORT_DIR", DEFAULT_VOICEPACK_EXPORT_DIR)
+)
+os.makedirs(VOICEPACK_EXPORT_DIR, exist_ok=True)
 _voicepack_cache = {}
 mutex = threading.Lock()
 # 支持的语言列表
@@ -190,6 +197,19 @@ os.makedirs("prompts",exist_ok=True)
 
 MAX_LENGTH_TO_USE_SPEED = 70
 example_cases = []
+EXAMPLE_VOICEPACK_PROFILES = {
+    "voice_01": {"displayName": "青年-女声-清亮灵动", "gender": "female"},
+    "voice_02": {"displayName": "青年-女声-坚定感性", "gender": "female"},
+    "voice_03": {"displayName": "青年-女声-明亮活泼", "gender": "female"},
+    "voice_04": {"displayName": "青年-女声-沉稳知性", "gender": "female"},
+    "voice_05": {"displayName": "中年-男声-厚重叙事", "gender": "male"},
+    "voice_06": {"displayName": "中年-男声-磁性诙谐", "gender": "male"},
+    "voice_07": {"displayName": "中年-男声-严肃沉稳", "gender": "male"},
+    "voice_08": {"displayName": "青年-女声-柔和感性", "gender": "female"},
+    "voice_09": {"displayName": "青年-女声-甜美俏皮", "gender": "female"},
+    "voice_11": {"displayName": "青年-女声-温婉忧郁", "gender": "female"},
+    "voice_12": {"displayName": "中年-男声-低沉冷峻", "gender": "male"},
+}
 with open("examples/cases.jsonl", "r", encoding="utf-8") as f:
     for line in f:
         line = line.strip()
@@ -231,7 +251,7 @@ def get_example_cases(include_experimental = False):
     if IS_V25:
         # The first UI column represents the installed voice pack, not its source WAV.
         return [
-            [os.path.splitext(os.path.basename(_example_voicepack_path(case[0])))[0], *case[1:]]
+            [_example_voicepack_label(case[0]), *case[1:]]
             for case in cases
         ]
     return cases
@@ -461,7 +481,8 @@ def _load_current_voicepack(pack_path):
     if not IS_V25 or voicepack_builder is None:
         raise ValueError("Voice packs require IndexTTS-2.5")
     resolved = os.path.abspath(pack_path)
-    if os.path.commonpath([VOICEPACK_DIR, resolved]) != VOICEPACK_DIR:
+    managed_roots = (VOICEPACK_DIR, VOICEPACK_EXPORT_DIR)
+    if all(os.path.commonpath([root, resolved]) != root for root in managed_roots):
         raise ValueError(i18n("只能选择应用音色包目录内的文件"))
     stat = os.stat(resolved)
     cache_key = (resolved, stat.st_mtime_ns, stat.st_size)
@@ -523,10 +544,16 @@ def format_voicepack_selection(pack_path):
 
 
 def refresh_voicepack_selection(selected=None, *, select_first=False):
+    if selected and os.path.isfile(selected):
+        try:
+            _load_current_voicepack(selected)
+            return selected, format_voicepack_selection(selected)
+        except Exception:
+            selected = ""
+
     choices = voicepack_choices()
     values = [value for _, value in choices]
-    if selected not in values:
-        selected = values[0] if select_first and values else ""
+    selected = values[0] if select_first and values else ""
     return selected, format_voicepack_selection(selected)
 
 
@@ -565,24 +592,51 @@ def _example_voicepack_path(audio_path):
     return os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
 
 
+def _example_voicepack_metadata(audio_path):
+    stem = os.path.splitext(os.path.basename(audio_path))[0]
+    profile = EXAMPLE_VOICEPACK_PROFILES.get(stem)
+    if profile is None:
+        return {
+            "voiceId": f"example-{stem}"[:64],
+            "displayName": f"成年-未知-{stem}",
+            "gender": "unknown",
+        }
+    return {
+        "voiceId": f"example-{stem}"[:64],
+        "displayName": profile["displayName"],
+        "gender": profile["gender"],
+    }
+
+
+def _example_voicepack_label(audio_path):
+    metadata = _example_voicepack_metadata(audio_path)
+    return f"{metadata['displayName']} · {metadata['voiceId']}"
+
+
+def _example_voicepack_path_from_label(label):
+    for case in example_cases:
+        if _example_voicepack_label(case[0]) == label:
+            return _example_voicepack_path(case[0])
+    raise gr.Error(i18n("音色包不可用"))
+
+
 def _build_example_voicepack(audio_path):
     output_path = _example_voicepack_path(audio_path)
-    stem = os.path.splitext(os.path.basename(audio_path))[0]
-    voice_id = os.path.splitext(os.path.basename(output_path))[0]
+    metadata = _example_voicepack_metadata(audio_path)
     if os.path.isfile(output_path):
         try:
-            _load_current_voicepack(output_path)
-            return output_path
+            existing = _load_current_voicepack(output_path)
+            if (
+                existing.manifest.get("displayName") == metadata["displayName"]
+                and existing.manifest.get("gender") == metadata["gender"]
+            ):
+                return output_path
         except Exception:
             pass
     with mutex:
         voicepack_builder.build(
             audio_path,
-            {
-                "voiceId": voice_id,
-                "displayName": f"{i18n('示例音色')} {stem}",
-                "gender": "unknown",
-            },
+            metadata,
             output_path,
         )
     _voicepack_cache.clear()
@@ -612,7 +666,7 @@ def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
         raise gr.Error(i18n("音色 ID 格式无效"))
     if not display_name:
         raise gr.Error(i18n("音色名称不能为空"))
-    output_path = os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
+    output_path = os.path.join(VOICEPACK_EXPORT_DIR, f"{voice_id}.ivp")
     try:
         with mutex:
             path = voicepack_builder.build(
@@ -1302,7 +1356,7 @@ with gr.Blocks(
             gr.update(value=example[13]),
         ]
         if IS_V25:
-            pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")
+            pack_path = _example_voicepack_path_from_label(example[0])
             _load_current_voicepack(pack_path)
             selection, details = refresh_voicepack_selection(pack_path)
             return [
@@ -1686,4 +1740,8 @@ with gr.Blocks(
 
 if __name__ == "__main__":
     demo.queue(20)
-    demo.launch(server_name=cmd_args.host, server_port=cmd_args.port)
+    demo.launch(
+        server_name=cmd_args.host,
+        server_port=cmd_args.port,
+        allowed_paths=[VOICEPACK_EXPORT_DIR],
+    )

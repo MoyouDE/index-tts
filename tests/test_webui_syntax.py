@@ -1,4 +1,5 @@
 from pathlib import Path
+import ast
 import json
 
 
@@ -34,8 +35,33 @@ def test_webui_can_install_select_and_synthesize_from_voicepacks():
     assert 'label=i18n("拖入 .ivp 音色包以安装并选中"),\n                    show_label=False,' in source
     assert 'infer_kwargs["voice_conditioning"] = voice_conditioning' in source
     assert "prebuild_example_voicepacks()" in source
-    assert 'pack_path = os.path.join(VOICEPACK_DIR, f"{example[0]}.ivp")' in source
+    assert "pack_path = _example_voicepack_path_from_label(example[0])" in source
     assert "快速设置（自动选择对应音色包）" in source
+    assert "VOICEPACK_EXPORT_DIR" in source
+    assert 'output_path = os.path.join(VOICEPACK_EXPORT_DIR, f"{voice_id}.ivp")' in source
+    assert "if selected and os.path.isfile(selected):" in source
+    assert "managed_roots = (VOICEPACK_DIR, VOICEPACK_EXPORT_DIR)" in source
+    assert "allowed_paths=[VOICEPACK_EXPORT_DIR]" in source
+
+
+def test_example_voicepack_names_have_age_gender_and_style_parts():
+    webui_path = Path(__file__).resolve().parents[1] / "webui.py"
+    tree = ast.parse(webui_path.read_text(encoding="utf-8"))
+    profiles = None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "EXAMPLE_VOICEPACK_PROFILES"
+            for target in node.targets
+        ):
+            profiles = ast.literal_eval(node.value)
+            break
+
+    assert profiles is not None
+    assert len(profiles) == 11
+    for profile in profiles.values():
+        age, gender, style = profile["displayName"].split("-", 2)
+        assert age and gender and style
+        assert profile["gender"] in {"female", "male"}
 
 
 def test_all_locale_files_are_valid_json():
