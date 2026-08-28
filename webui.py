@@ -198,17 +198,17 @@ os.makedirs("prompts",exist_ok=True)
 MAX_LENGTH_TO_USE_SPEED = 70
 example_cases = []
 EXAMPLE_VOICEPACK_PROFILES = {
-    "voice_01": {"displayName": "青年-女声-清亮灵动", "gender": "female"},
-    "voice_02": {"displayName": "青年-女声-坚定感性", "gender": "female"},
-    "voice_03": {"displayName": "青年-女声-明亮活泼", "gender": "female"},
-    "voice_04": {"displayName": "青年-女声-沉稳知性", "gender": "female"},
-    "voice_05": {"displayName": "中年-男声-厚重叙事", "gender": "male"},
-    "voice_06": {"displayName": "中年-男声-磁性诙谐", "gender": "male"},
-    "voice_07": {"displayName": "中年-男声-严肃沉稳", "gender": "male"},
-    "voice_08": {"displayName": "青年-女声-柔和感性", "gender": "female"},
-    "voice_09": {"displayName": "青年-女声-甜美俏皮", "gender": "female"},
-    "voice_11": {"displayName": "青年-女声-温婉忧郁", "gender": "female"},
-    "voice_12": {"displayName": "中年-男声-低沉冷峻", "gender": "male"},
+    "voice_01": {"voiceId": "young-female-clear-lively", "displayName": "青年-女声-清亮灵动", "gender": "female"},
+    "voice_02": {"voiceId": "young-female-firm-emotive", "displayName": "青年-女声-坚定感性", "gender": "female"},
+    "voice_03": {"voiceId": "young-female-bright-cheerful", "displayName": "青年-女声-明亮活泼", "gender": "female"},
+    "voice_04": {"voiceId": "young-female-calm-intellectual", "displayName": "青年-女声-沉稳知性", "gender": "female"},
+    "voice_05": {"voiceId": "middle-aged-male-deep-narrative", "displayName": "中年-男声-厚重叙事", "gender": "male"},
+    "voice_06": {"voiceId": "middle-aged-male-magnetic-witty", "displayName": "中年-男声-磁性诙谐", "gender": "male"},
+    "voice_07": {"voiceId": "middle-aged-male-serious-steady", "displayName": "中年-男声-严肃沉稳", "gender": "male"},
+    "voice_08": {"voiceId": "young-female-soft-emotive", "displayName": "青年-女声-柔和感性", "gender": "female"},
+    "voice_09": {"voiceId": "young-female-sweet-playful", "displayName": "青年-女声-甜美俏皮", "gender": "female"},
+    "voice_11": {"voiceId": "young-female-gentle-melancholic", "displayName": "青年-女声-温婉忧郁", "gender": "female"},
+    "voice_12": {"voiceId": "middle-aged-male-deep-stern", "displayName": "中年-男声-低沉冷峻", "gender": "male"},
 }
 with open("examples/cases.jsonl", "r", encoding="utf-8") as f:
     for line in f:
@@ -537,10 +537,7 @@ def format_voicepack_selection(pack_path):
     except Exception as exc:
         return f"❌ {i18n('音色包不可用')}：{exc}"
     manifest = pack.manifest
-    return (
-        f"✅ **{manifest['displayName']}**  ·  `{manifest['voiceId']}`  ·  "
-        f"{i18n('已使用预计算音色，不会重新编码参考音频')}"
-    )
+    return manifest["displayName"]
 
 
 def refresh_voicepack_selection(selected=None, *, select_first=False):
@@ -586,9 +583,7 @@ def import_voicepack_from_webui(uploaded_pack):
 
 
 def _example_voicepack_path(audio_path):
-    stem = os.path.splitext(os.path.basename(audio_path))[0]
-    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "voice"
-    voice_id = f"example-{safe_stem}"[:64]
+    voice_id = _example_voicepack_metadata(audio_path)["voiceId"]
     return os.path.join(VOICEPACK_DIR, f"{voice_id}.ivp")
 
 
@@ -596,13 +591,14 @@ def _example_voicepack_metadata(audio_path):
     stem = os.path.splitext(os.path.basename(audio_path))[0]
     profile = EXAMPLE_VOICEPACK_PROFILES.get(stem)
     if profile is None:
+        safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip("-._") or "voice"
         return {
-            "voiceId": f"example-{stem}"[:64],
+            "voiceId": f"builtin-{safe_stem}"[:64],
             "displayName": f"成年-未知-{stem}",
             "gender": "unknown",
         }
     return {
-        "voiceId": f"example-{stem}"[:64],
+        "voiceId": profile["voiceId"],
         "displayName": profile["displayName"],
         "gender": profile["gender"],
     }
@@ -627,7 +623,8 @@ def _build_example_voicepack(audio_path):
         try:
             existing = _load_current_voicepack(output_path)
             if (
-                existing.manifest.get("displayName") == metadata["displayName"]
+                existing.manifest.get("voiceId") == metadata["voiceId"]
+                and existing.manifest.get("displayName") == metadata["displayName"]
                 and existing.manifest.get("gender") == metadata["gender"]
             ):
                 return output_path
@@ -652,6 +649,13 @@ def prebuild_example_voicepacks():
     for index, audio_path in enumerate(unique_audio, start=1):
         output_path = _build_example_voicepack(audio_path)
         print(f">> Example voice pack {index}/{len(unique_audio)} ready: {output_path}")
+    for audio_path in unique_audio:
+        stem = os.path.splitext(os.path.basename(audio_path))[0]
+        legacy_path = os.path.join(VOICEPACK_DIR, f"example-{stem}.ivp")
+        if os.path.isfile(legacy_path) and os.path.abspath(legacy_path) != os.path.abspath(_example_voicepack_path(audio_path)):
+            os.remove(legacy_path)
+            print(f">> Removed legacy example voice pack: {legacy_path}")
+    _voicepack_cache.clear()
 
 
 def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):

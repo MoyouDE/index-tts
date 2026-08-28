@@ -1,6 +1,7 @@
 from pathlib import Path
 import ast
 import json
+import re
 
 
 def test_webui_python_source_parses():
@@ -42,6 +43,9 @@ def test_webui_can_install_select_and_synthesize_from_voicepacks():
     assert "if selected and os.path.isfile(selected):" in source
     assert "managed_roots = (VOICEPACK_DIR, VOICEPACK_EXPORT_DIR)" in source
     assert "allowed_paths=[VOICEPACK_EXPORT_DIR]" in source
+    assert 'return manifest["displayName"]' in source
+    assert "已使用预计算音色，不会重新编码参考音频" not in source
+    assert 'existing.manifest.get("voiceId") == metadata["voiceId"]' in source
 
 
 def test_example_voicepack_names_have_age_gender_and_style_parts():
@@ -58,10 +62,15 @@ def test_example_voicepack_names_have_age_gender_and_style_parts():
 
     assert profiles is not None
     assert len(profiles) == 11
+    voice_ids = set()
     for profile in profiles.values():
         age, gender, style = profile["displayName"].split("-", 2)
         assert age and gender and style
         assert profile["gender"] in {"female", "male"}
+        assert re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", profile["voiceId"])
+        assert "example" not in profile["voiceId"]
+        voice_ids.add(profile["voiceId"])
+    assert len(voice_ids) == len(profiles)
 
 
 def test_all_locale_files_are_valid_json():

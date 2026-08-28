@@ -21,7 +21,7 @@ IndexTTS-2.5 WebUI 将使用和制作分成两个页签。“音频生成”页�
 
 WebUI 首次启动时会提前为全部官方示例音色生成并校验 `example-*.ivp`。页面下方的“快速设置”行只切换对应的现成音色包、文本、语言和情感参数，点击时不再执行参考音频编码。
 
-官方示例音色使用“年龄-性别-风格”三段式显示名，同时保留稳定的 `example-voice_*` ID。WebUI 从上传参考音频制作的新包默认生成到 Readest 父目录的 `index-tts-package/SoundPackage`；可通过 `INDEXTTS_VOICEPACK_EXPORT_DIR` 覆盖服务端输出目录。浏览器下载按钮以该文件为下载源，最终客户端下载目录仍由浏览器设置决定。
+内置音色使用“年龄-性别-风格”三段式显示名，并使用能体现相同特征的稳定 ASCII ID（例如 `young-female-clear-lively`），不再使用测试性质的 `example-voice_*` ID。WebUI 从上传参考音频制作的新包默认生成到 Readest 父目录的 `index-tts-package/SoundPackage`；可通过 `INDEXTTS_VOICEPACK_EXPORT_DIR` 覆盖服务端输出目录。浏览器下载按钮以该文件为下载源，最终客户端下载目录仍由浏览器设置决定。
 
 `.ivp` 是确定性 ZIP，只允许以下文件：
 
