@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -55,7 +56,7 @@ class EmotionProvider(ABC):
 
 class ExplicitEmotionProvider(EmotionProvider):
     def __init__(self, vector: Sequence[float]):
-        self.vector = normalize_emotion(vector)
+        self.vector = normalize_emotion(vector, fallback_to_calm=False)
 
     def analyze(self, text: str) -> list[float]:
         self.warning = None
@@ -63,13 +64,99 @@ class ExplicitEmotionProvider(EmotionProvider):
 
 
 class OnnxEmotionProvider(EmotionProvider):
-    """Reserved ABI for a future compact classifier; no model is distributed yet."""
+    """FP32 MacBERT provider used for validation outside the Readest Rust host."""
 
-    def __init__(self, model_path: str | Path):
-        self.model_path = Path(model_path)
+    def __init__(self, model_path: str | Path, *, neutral_threshold: float | None = None):
+        candidate = Path(model_path).resolve()
+        self.model_dir = candidate.parent if candidate.is_file() else candidate
+        self.neutral_threshold = None if neutral_threshold is None else float(neutral_threshold)
+        self.max_length = 256
+        self._session = None
+        self._tokenizer = None
+        self.warning = None
+
+    def _load(self) -> None:
+        if self._session is not None:
+            return
+        try:
+            import onnxruntime as ort
+        except ImportError as exc:
+            raise RuntimeError("使用 ONNX 情感后端需要独立 emotion-onnx 工具环境") from exc
+        from transformers import AutoTokenizer
+
+        manifest_path = self.model_dir / "emotion_model.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if (
+            manifest.get("conditioningAbi") != "readest-emotion-v1"
+            or manifest.get("labels") != EMOTION_NAMES
+            or manifest.get("precision") != "fp32"
+            or manifest.get("releaseStatus") != "approved"
+        ):
+            raise ValueError("ONNX 情感模型 manifest ABI、精度或发布状态无效")
+        if self.neutral_threshold is None:
+            self.neutral_threshold = float(manifest.get("neutralThreshold", 0.15))
+        self.max_length = int(manifest.get("maxLength", 256))
+        if not 1 <= self.max_length <= 512:
+            raise ValueError("ONNX 情感模型 manifest 的 maxLength 必须位于 [1, 512]")
+        for name, metadata in manifest.get("files", {}).items():
+            if (
+                Path(name).name != name
+                or name in {".", ".."}
+                or "/" in name
+                or "\\" in name
+                or ":" in name
+            ):
+                raise ValueError(f"ONNX 情感模型 manifest 含不安全路径: {name}")
+            path = self.model_dir / name
+            if path.stat().st_size != int(metadata["bytes"]):
+                raise ValueError(f"ONNX 情感模型文件大小不匹配: {name}")
+            if hashlib.sha256(path.read_bytes()).hexdigest() != metadata["sha256"]:
+                raise ValueError(f"ONNX 情感模型文件哈希不匹配: {name}")
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            self.model_dir, local_files_only=True, use_fast=True
+        )
+        self._session = ort.InferenceSession(
+            str(self.model_dir / "emotion.onnx"), providers=["CPUExecutionProvider"]
+        )
+
+    def analyze_context(
+        self,
+        previous_text: str,
+        text: str,
+        sentence_type: str = "narration",
+    ) -> list[float]:
+        self._load()
+        import numpy as np
+
+        current = ("[对白]" if sentence_type == "dialogue" else "[旁白]") + text.strip()
+        batch = self._tokenizer(
+            [previous_text.strip()],
+            [current],
+            max_length=self.max_length,
+            truncation=True,
+            padding=True,
+            return_tensors="np",
+        )
+        if "token_type_ids" not in batch:
+            batch["token_type_ids"] = np.zeros_like(batch["input_ids"])
+        vector, intensity = self._session.run(
+            ["emotion_vector", "total_intensity"],
+            {
+                name: np.asarray(batch[name], dtype=np.int64)
+                for name in ("input_ids", "attention_mask", "token_type_ids")
+            },
+        )
+        if vector.shape != (1, 8) or intensity.shape != (1, 1):
+            raise ValueError(
+                f"ONNX 情感模型输出形状无效: vector={vector.shape}, intensity={intensity.shape}"
+            )
+        self.warning = None
+        if float(intensity[0, 0]) < float(self.neutral_threshold):
+            return [0.0] * 8
+        return [max(0.0, min(1.0, float(value))) for value in vector[0]]
 
     def analyze(self, text: str) -> list[float]:
-        raise NotImplementedError("本版本尚未分发 ONNX 情感分类器")
+        return self.analyze_context("", text, "narration")
 
 
 class QwenEmotionProvider(EmotionProvider):

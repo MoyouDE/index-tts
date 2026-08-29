@@ -20,7 +20,7 @@ from safetensors.torch import load_file
 
 from indextts.gpt.model_v2 import UnifiedVoice
 from indextts.runtime.codec import SemanticCodecDecoder
-from indextts.runtime.emotion import CALM_VECTOR, EmotionProvider, normalize_emotion
+from indextts.runtime.emotion import EmotionProvider, normalize_emotion
 from indextts.runtime.model_export import verify_runtime_model
 from indextts.runtime.text import apply_pronunciation_annotations, split_text_by_punctuation, split_text_by_tokens
 from indextts.runtime.tokenizer import ReaderTokenizer
@@ -182,10 +182,12 @@ class ReaderRuntime:
                 warning = getattr(self.emotion_provider, "warning", None)
                 if warning:
                     warnings.append(warning)
-                return normalize_emotion(vector, apply_bias=False), "auto", warnings
+                return normalize_emotion(
+                    vector, apply_bias=False, fallback_to_calm=False
+                ), "auto", warnings
             except Exception as exc:
-                warnings.append(f"自动情感分析失败，已回退 calm: {exc}")
-                return CALM_VECTOR.copy(), "auto", warnings
+                warnings.append(f"自动情感分析失败，已回退音色基础情感: {exc}")
+                return None, "base", warnings
         if isinstance(emotion, str):
             raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
         return normalize_emotion(emotion, fallback_to_calm=False), "explicit", warnings

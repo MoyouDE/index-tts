@@ -92,6 +92,9 @@ torch_compile = [
 test = [
   "pytest>=7.0",
 ]
+emotion_train = [
+  "datasets>=3.0,<5",
+]
 
 [tool.pytest.ini_options]
 markers = [
@@ -108,6 +111,7 @@ indextts = "indextts.cli:main"
 indextts2 = "indextts.cli_v2:main"
 indextts-voicepack = "indextts.voicepack.cli:main"
 indextts-runtime = "indextts.runtime.cli:main"
+indextts-emotion = "indextts.emotion.cli:main"
 
 [build-system]
 # How to build the project as a CLI tool or PyPI package.

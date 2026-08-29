@@ -79,7 +79,7 @@ def test_emotion_normalization_applies_bias_and_caps_total():
     assert len(vector) == 8
     assert sum(vector) == pytest.approx(0.8)
     assert vector[2] > vector[6]
-    assert ExplicitEmotionProvider([0, 0, 0, 0, 0, 0, 0, 0]).analyze("任意") == CALM_VECTOR
+    assert ExplicitEmotionProvider([0, 0, 0, 0, 0, 0, 0, 0]).analyze("任意") == [0.0] * 8
 
 
 def test_reader_runtime_defaults_to_voicepack_base_emotion_and_preserves_zero_vector():
@@ -98,6 +98,21 @@ def test_reader_runtime_defaults_to_voicepack_base_emotion_and_preserves_zero_ve
 
     with pytest.raises(ValueError, match="未配置自动情感后端"):
         runtime._emotion_vector("任意文本", "auto")
+
+
+def test_reader_runtime_auto_failure_falls_back_to_voicepack_base_emotion():
+    class BrokenProvider:
+        warning = None
+
+        def analyze(self, text):
+            raise RuntimeError("broken")
+
+    runtime = ReaderRuntime.__new__(ReaderRuntime)
+    runtime.emotion_provider = BrokenProvider()
+    vector, mode, warnings = runtime._emotion_vector("任意文本", "auto")
+    assert vector is None
+    assert mode == "base"
+    assert "基础情感" in warnings[0]
 
 
 def test_voice_condition_blends_explicit_basis_without_dropping_base_emotion():
