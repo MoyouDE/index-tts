@@ -1,7 +1,0 @@
-{
-  "config": "chn",
-  "dataset": "brighter-dataset/BRIGHTER-emotion-intensities",
-  "homepage": "https://huggingface.co/datasets/brighter-dataset/BRIGHTER-emotion-intensities",
-  "license": "CC-BY-4.0",
-  "note": "melancholic 与 calm 未标注，训练时通过 labelMask 屏蔽。"
-}
