@@ -4,7 +4,16 @@
 
 ## 数据约束
 
-训练 loader 同时接受历史 JSONL schema v1 和仅含 `emotions` 标签字段的连续 v3 schema。连续 v3 在内存中派生全维监督掩码及 `max(emotions)` 辅助强度，不向磁盘快照回写 `labelMask` 或 `intensity`。`previousText` 的当前语义是目标句前最多三个完整句子，按最早到最近以换行连接。训练与推理上限固定为 256 token；上文逐句试加，遇到超限立即停止，只有目标自身超长时才允许 tokenizer 右截断。
+训练 loader 同时接受历史 JSONL schema v1、连续 v3，以及正式的 `readest-emotion-target-context-v1`。目标上下文 schema 不再使用 `previousText`，而是保存同一 section 内按原文顺序排列的 `sentences[]` 和 `targetSentenceId`；唯一磁盘标签仍是八维 `emotions`。当前 20,518 条小说训练快照位于 `outputs/emotion-data/training-ready-v3-novel-tgt-context512/`，由 `training-ready-v3-r2` 标签和原文重新分句后严格映射生成，ID、split、作品归属与八维标签逐值不变。
+
+模型输入是带原子标记的单序列：目标句渲染为 `[TGT][对白|旁白]目标正文[/TGT]`，上下文句渲染为 `[对白|旁白]正文`，跨段落插入 `[NL]`。512-token 预算按“目标 → 最近前一句 → 同 section 且同段的紧邻后一句 → 继续向前”选择，最终恢复原文顺序。上下文句必须完整；前句放不下时仍尝试同段后句但停止加入更早前文，后句放不下时可继续向前填充。任何上下文都不跨 section，只有目标自身超过上限时才对目标正文确定性右截断。
+
+```powershell
+uv run indextts-emotion prepare-emotion-target-context512 `
+  --input outputs/emotion-data/training-ready-v3-r2 `
+  --project-root .. `
+  --output outputs/emotion-data/training-ready-v3-novel-tgt-context512
+```
 
 BRIGHTER 中文强度数据仅覆盖 `happy/angry/sad/afraid/disgusted/surprised`，因此转换器会把 `melancholic/calm` 的掩码设为 0，而不是错误地把它们标成 0。正式发布还要求至少 12,000 条完整八维、权利明确的中文小说上下文标注。
 
@@ -33,7 +42,7 @@ uv run indextts-emotion resplit-by-work `
 
 ## 训练与导出
 
-Windows 本机测试训练优先双击仓库根目录的 `train-emotion.bat`。脚本固定使用当前 `.venv`、FP32 MacBERT、v2 小说数据和已落盘 BRIGHTER，依次执行预检、训练、dev-only neutral 阈值校准、小说 test 评估和小说+BRIGHTER 综合 test；不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
+Windows 本机训练入口会调用 `_train_emotion_inner.bat`。它已经切换到 `training-ready-v3-novel-tgt-context512` 的纯小说 train/dev/test，不再读取 BRIGHTER；固定 512 token、batch 6、梯度累积 4（有效 batch 24），依次执行完整上下文预检、训练、dev-only neutral 阈值校准和小说 test 评估。脚本不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`，本轮也没有执行该脚本。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
 
 训练终端实时显示 epoch、batch、optimizer step、ETA、三项 loss、学习率和 CUDA 显存。每 200 个 optimizer step 以及每轮结束保存原子 checkpoint，最多保留最近两个；按一次 Ctrl+C 会在安全更新边界保存，重新双击 BAT 会按数据哈希和完整训练配置自动续训。配置或数据不匹配时拒绝恢复，训练完成后再次启动只跳过优化并重新验证最佳模型。固定参数为 8 epochs、强度损失权重 0.7、neutral 样本权重 3.0；输出位于 `outputs/emotion-data/macbert-training-v2/`，并包含 `best/`、`training-report.json`、`threshold-calibration.json`、`neutral-threshold.txt`、`novel-test-metrics.json` 和 `test-metrics.json`。
 
@@ -60,7 +69,7 @@ uv run indextts-emotion evaluate `
   --neutral-threshold 0.16 --max-length 256
 ```
 
-以上路线已经在 RTX 4070 SUPER 完整执行。最佳验证 checkpoint 位于第 8 轮；在 4,135 条小说 test 上 Macro F1 约 0.593、Macro Spearman 约 0.398、强度 MAE 约 0.187、neutral 误触发约 0.234。在 6,777 条小说+BRIGHTER test 上相应为 0.534 / 0.439 / 0.172 / 0.233。它刻意不带 `--release`；使用本地 BRIGHTER JSONL 可以固定数据哈希并避免训练时联网。
+以上命令与指标仅用于复现已经完成的 256-token v2 历史实验，不代表新的 512-token 路线已经训练。最佳验证 checkpoint 位于第 8 轮；在 4,135 条小说 test 上 Macro F1 约 0.593、Macro Spearman 约 0.398、强度 MAE 约 0.187、neutral 误触发约 0.234。在 6,777 条小说+BRIGHTER test 上相应为 0.534 / 0.439 / 0.172 / 0.233。它刻意不带 `--release`；使用本地 BRIGHTER JSONL 可以固定数据哈希并避免训练时联网。
 
 同一 4,135 条小说 test 的既有 Qwen 预标注经过文本哈希校验，并把 IndexTTS 的 `natural` 默认输出语义对齐为 base 后，Macro F1 约 0.155、Macro Spearman 约 0.220、强度 MAE 约 0.363、neutral 误触发约 0.173。MacBERT 在八个维度全部领先。CPU 实测 MacBERT PyTorch batch=1 热推理平均约 37ms、p95 约 51ms，Qwen 平均约 6.8s、p95 约 7.2s；目录体积约 391MiB 对 1,152MiB。因此当前路线保留专用 MacBERT，不采用现有 Qwen 作为最终后端。
 
@@ -78,9 +87,9 @@ uv run --project tools/emotion-onnx python -m indextts.emotion.cli verify-onnx -
 
 ONNX 使用独立工具环境，是因为 IndexTTS 上游音频依赖要求旧版 protobuf，而现代 ONNX 要求新版 protobuf；两个环境必须隔离，不能通过升级主环境 protobuf 绕过。
 
-导出的情感 manifest 使用 `conditioningAbi=readest-emotion-v2`，并固定 `contextPolicy=nearest-three-complete-preceding-v1`、`contextSentenceLimit=3`、`contextDelimiter="\n"` 与 `maxLength=256`。阅读器向 Tauri 传入按最早到最近排列的 `previousSentences`；Rust 使用模型 tokenizer 重现完整句预算，并在结果中返回采用句数、实际输入 token 数和是否因预算受限。
+导出的情感 manifest 使用 `conditioningAbi=readest-emotion-v3`，并固定 `contextPolicy=target-prev-next-same-line-backfill-prev-section-v1`、`contextEncoding=tgt-type-marked-single-sequence-v1`、五个 special token 及其 ID 与 `maxLength=512`。tokenizer 与模型 embedding 必须包含同一套新增词；导出时不匹配会直接失败。
 
-阅读器侧情感管线复用全书 `SentencesCache`：当前句在音频合成前等待分析完成，后续最多五句在后台预计算。每个目标仅回溯自身之前的三句，可跨 section；跳转、文本修订和销毁会取消旧 generation，缓存则同时绑定书籍、文本修订、目标指纹、模型版本和上下文策略。分析失败只给当前句挂载 base fallback，不阻塞播放。本阶段仍不把向量传给具体 TTS 供应商。
+阅读器向 Tauri 传入目标所在 section 的完整句序列和目标 ID。Rust 使用模型 tokenizer 重现与训练完全相同的选择、标记渲染和预算规则，返回采用句 ID、是否采用同段后句、实际 token 数、预算受限及目标截断诊断。情感管线仍复用 `SentencesCache`，当前句在音频合成前等待分析，后续最多五句按各自 section 后台预计算；不会跨章节取上下文，也不会让未来句进入非紧邻或跨段目标。跳转、文本修订和销毁会取消旧 generation，失败则挂载 base fallback，不阻塞播放。本阶段仍不把向量传给具体 TTS 供应商。
 
 发布批准文件必须将 `qualityGatePassed`、`humanBlindTestPassed`、`commercialDataAuditPassed`、`noQwenPseudoLabels` 四项设为 `true`，并携带训练报告、MacBERT/Qwen 指标、盲测和数据审计五份输入的 SHA-256。发布包需要保留 MacBERT Apache-2.0 声明、BRIGHTER CC BY 4.0 署名以及自建语料授权记录。
 

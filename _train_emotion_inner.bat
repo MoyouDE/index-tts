@@ -4,26 +4,22 @@ cd /d "%~dp0"
 
 REM === Stable FP32 MacBERT emotion training configuration ===
 set "PYTHON=%~dp0.venv/Scripts/python.exe"
-set "NOVEL_TRAIN=outputs/emotion-data/training-ready-v2/train.jsonl"
-set "NOVEL_DEV=outputs/emotion-data/training-ready-v2/dev.jsonl"
-set "NOVEL_TEST=outputs/emotion-data/training-ready-v2/test.jsonl"
-set "BRIGHTER_TRAIN=outputs/emotion-data/brighter/brighter-chn-train.jsonl"
-set "BRIGHTER_DEV=outputs/emotion-data/brighter/brighter-chn-dev.jsonl"
-set "BRIGHTER_TEST=outputs/emotion-data/brighter/brighter-chn-test.jsonl"
-set "OUTPUT_DIR=outputs/emotion-data/macbert-training-v2"
+set "NOVEL_TRAIN=outputs/emotion-data/training-ready-v3-novel-tgt-context512/train.jsonl"
+set "NOVEL_DEV=outputs/emotion-data/training-ready-v3-novel-tgt-context512/dev.jsonl"
+set "NOVEL_TEST=outputs/emotion-data/training-ready-v3-novel-tgt-context512/test.jsonl"
+set "OUTPUT_DIR=outputs/emotion-data/macbert-training-v3-tgt-context512"
 set "PREFLIGHT_REPORT=%OUTPUT_DIR%/preflight.json"
 set "THRESHOLD_CALIBRATION=%OUTPUT_DIR%/threshold-calibration.json"
 set "THRESHOLD_VALUE=%OUTPUT_DIR%/neutral-threshold.txt"
-set "NOVEL_TEST_METRICS=%OUTPUT_DIR%/novel-test-metrics.json"
 set "TEST_METRICS=%OUTPUT_DIR%/test-metrics.json"
 set "EPOCHS=8"
-set "BATCH_SIZE=12"
-set "GRADIENT_ACCUMULATION=2"
+set "BATCH_SIZE=6"
+set "GRADIENT_ACCUMULATION=4"
 set "LEARNING_RATE=2e-5"
 set "HEAD_LEARNING_RATE=1e-4"
 set "INTENSITY_LOSS_WEIGHT=0.7"
 set "NEUTRAL_LOSS_WEIGHT=3.0"
-set "MAX_LENGTH=256"
+set "MAX_LENGTH=512"
 set "SEED=20260829"
 set "CHECKPOINT_STEPS=200"
 set "KEEP_CHECKPOINTS=2"
@@ -66,7 +62,7 @@ if not exist "%PYTHON%" (
     goto :end
 )
 
-for %%F in ("%NOVEL_TRAIN%" "%NOVEL_DEV%" "%NOVEL_TEST%" "%BRIGHTER_TRAIN%" "%BRIGHTER_DEV%" "%BRIGHTER_TEST%") do (
+for %%F in ("%NOVEL_TRAIN%" "%NOVEL_DEV%" "%NOVEL_TEST%") do (
     if not exist "%%~F" (
         echo [ERROR] Training input not found: %%~F
         set "FINAL_EXIT=2"
@@ -74,17 +70,15 @@ for %%F in ("%NOVEL_TRAIN%" "%NOVEL_DEV%" "%NOVEL_TEST%" "%BRIGHTER_TRAIN%" "%BR
     )
 )
 
-echo [1/5] Environment and data preflight...
+echo [1/4] Environment and data preflight...
 echo.
 "%PYTHON%" -m indextts.emotion.cli preflight-training ^
     --train "%NOVEL_TRAIN%" ^
-    --train "%BRIGHTER_TRAIN%" ^
     --dev "%NOVEL_DEV%" ^
-    --dev "%BRIGHTER_DEV%" ^
     --test "%NOVEL_TEST%" ^
-    --test "%BRIGHTER_TEST%" ^
     --output "%PREFLIGHT_REPORT%" ^
     --max-length %MAX_LENGTH% ^
+    --require-complete-context ^
     --verify-base-weights ^
     --require-cuda ^
     --minimum-free-vram-gib %MIN_FREE_VRAM_GIB% ^
@@ -97,13 +91,11 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/5] Training with automatic resume...
+echo [2/4] Training with automatic resume...
 echo.
 "%PYTHON%" -m indextts.emotion.cli train ^
     --train "%NOVEL_TRAIN%" ^
-    --train "%BRIGHTER_TRAIN%" ^
     --dev "%NOVEL_DEV%" ^
-    --dev "%BRIGHTER_DEV%" ^
     --output "%OUTPUT_DIR%" ^
     --epochs %EPOCHS% ^
     --batch-size %BATCH_SIZE% ^
@@ -143,12 +135,11 @@ if not exist "%OUTPUT_DIR%/best/model.safetensors" (
 )
 
 echo.
-echo [3/5] Calibrating the neutral gate on dev data only...
+echo [3/4] Calibrating the neutral gate on dev data only...
 echo.
 "%PYTHON%" -m indextts.emotion.cli calibrate-threshold ^
     --checkpoint "%OUTPUT_DIR%/best" ^
     --data "%NOVEL_DEV%" ^
-    --data "%BRIGHTER_DEV%" ^
     --output "%THRESHOLD_CALIBRATION%" ^
     --threshold-output "%THRESHOLD_VALUE%" ^
     --minimum-active-recall 0.8 ^
@@ -172,31 +163,11 @@ if not defined NEUTRAL_THRESHOLD (
 echo  Calibrated neutral threshold: %NEUTRAL_THRESHOLD%
 
 echo.
-echo [4/5] Evaluating the held-out novel test set...
+echo [4/4] Evaluating the held-out novel test set...
 echo.
 "%PYTHON%" -m indextts.emotion.cli evaluate ^
     --checkpoint "%OUTPUT_DIR%/best" ^
     --data "%NOVEL_TEST%" ^
-    --output "%NOVEL_TEST_METRICS%" ^
-    --batch-size 32 ^
-    --max-length %MAX_LENGTH% ^
-    --neutral-threshold %NEUTRAL_THRESHOLD% ^
-    --device cuda ^
-    --progress
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Novel test evaluation failed.
-    set "FINAL_EXIT=2"
-    goto :end
-)
-
-echo.
-echo [5/5] Evaluating the combined novel and BRIGHTER test sets...
-echo.
-"%PYTHON%" -m indextts.emotion.cli evaluate ^
-    --checkpoint "%OUTPUT_DIR%/best" ^
-    --data "%NOVEL_TEST%" ^
-    --data "%BRIGHTER_TEST%" ^
     --output "%TEST_METRICS%" ^
     --batch-size 32 ^
     --max-length %MAX_LENGTH% ^
@@ -217,7 +188,6 @@ echo   Training and evaluation completed
 echo   Best model:   %OUTPUT_DIR%/best
 echo   Train report: %OUTPUT_DIR%/training-report.json
 echo   Calibration:  %THRESHOLD_CALIBRATION%
-echo   Novel test:   %NOVEL_TEST_METRICS%
 echo   Test metrics: %TEST_METRICS%
 echo ============================================
 

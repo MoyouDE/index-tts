@@ -110,7 +110,7 @@ uv run indextts-emotion finalize-continuous-v3 --reviews agent-reviews.jsonl ...
 
 最终化必须确认 25,990 个有效 ID 全部且只出现一次、48 个排除 ID 全部且只出现在排除审计中，调整后的 split 计数和小说作品级切分不变，所有向量键序和值域合法，并允许严格全零。任何数量、作品归属、哈希、复核、排除审计或 schema 校验失败都会阻止生成训练就绪快照。
 
-## 三句完整上文快照
+## 历史三句完整上文快照
 
 当前小说标签从 `training-ready-v3-r2` 派生到 `outputs/emotion-data/training-ready-v3-novel-context3/`。派生过程只替换 `previousText`，全部 20,518 条小说记录的 ID、split、句型、来源字段和 `emotions` 逐值不变；train/dev/test 分别为 13,496 / 2,896 / 4,126。
 
@@ -125,3 +125,18 @@ uv run indextts-emotion expand-continuous-v3-context `
 ```
 
 本次固定分布为 0/1/2/3 个前句 522 / 790 / 973 / 18,233 条，10 条目标句自身超长。`audit/context-expansion.jsonl` 为每条记录保存前句 ID、原始与扩充上文、实际 token 数、停止原因和输入输出哈希。
+
+## 当前 TGT 关联窗口快照
+
+当前正式输入快照为 `outputs/emotion-data/training-ready-v3-novel-tgt-context512/`，schema 是 `readest-emotion-target-context-v1`。它从 `training-ready-v3-r2` 只读取 20,518 条小说标签，再从普通小说原文或 CSI/JY/WP2021 clean 原文及 manifest 重新建立 section、段落和完整句序列。旧标注窗口只作为目标严格映射证据，不再作为模型上下文。
+
+每条记录保存按原文顺序排列的 `sentences[]` 与 `targetSentenceId`，不保存 `previousText`。512-token 选择顺序是目标、最近前一句、同 section 且同 `lineIndex` 的紧邻后一句、继续向前；最终渲染为带 `[TGT]`、`[/TGT]`、`[旁白]`、`[对白]`、`[NL]` 原子标记的单序列。任何上下文都不能跨 section，紧邻后句不能跨段落。
+
+```powershell
+uv run indextts-emotion prepare-emotion-target-context512 `
+  --input outputs/emotion-data/training-ready-v3-r2 `
+  --project-root .. `
+  --output outputs/emotion-data/training-ready-v3-novel-tgt-context512
+```
+
+输出继续固定为 train/dev/test 13,496 / 2,896 / 4,126，且每条 `emotions`、ID、split 和作品归属逐值不变。`audit/source-sections.jsonl` 保存重采集句序列，`audit/context-selection.jsonl` 保存目标映射方法、采用句、实际 token 数、停止原因和输入输出哈希；任何缺失、歧义或非法映射都会阻止最终化。

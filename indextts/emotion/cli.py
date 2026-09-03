@@ -8,6 +8,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from .context_policy import CONTEXT_MAX_LENGTH
 from .schema import EmotionExample, load_jsonl_examples, validate_work_splits
 
 
@@ -353,6 +354,33 @@ def command_expand_continuous_v3_context(args) -> int:
             base_model=args.base_model,
             max_length=args.max_length,
         )
+    )
+    return 0
+
+
+def command_prepare_emotion_target_context512(args) -> int:
+    from .target_context_data import prepare_emotion_target_context512
+
+    report = prepare_emotion_target_context512(
+        args.input,
+        args.project_root,
+        args.output,
+        base_model=args.base_model,
+        max_length=args.max_length,
+    )
+    _json(
+        {
+            key: report[key]
+            for key in (
+                "output",
+                "recordCount",
+                "splitCounts",
+                "sameLineNextEligibleCount",
+                "sameLineNextIncludedCount",
+                "targetTruncatedCount",
+                "manifestSha256",
+            )
+        }
     )
     return 0
 
@@ -827,7 +855,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_training.add_argument("--test", action="append", required=True)
     preflight_training.add_argument("--output", required=True)
     preflight_training.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
-    preflight_training.add_argument("--max-length", type=int, default=256)
+    preflight_training.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
     preflight_training.add_argument("--verify-base-weights", action="store_true")
     preflight_training.add_argument("--minimum-positive", type=int, default=1_000)
     preflight_training.add_argument("--require-cuda", action="store_true")
@@ -836,7 +864,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_training.add_argument(
         "--require-complete-context",
         action="store_true",
-        help="要求 previousText 遵循最多三句完整上文且不发生上文截断",
+        help="要求 TGT/历史上下文遵循完整句预算且不发生上下文截断",
     )
     preflight_training.set_defaults(func=command_preflight_training)
 
@@ -894,6 +922,17 @@ def build_parser() -> argparse.ArgumentParser:
     expand_continuous_v3_context.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
     expand_continuous_v3_context.add_argument("--max-length", type=int, default=256)
     expand_continuous_v3_context.set_defaults(func=command_expand_continuous_v3_context)
+
+    target_context = sub.add_parser(
+        "prepare-emotion-target-context512",
+        help="从 r2 小说标签和原文重采集 512-token TGT 单序列训练快照",
+    )
+    target_context.add_argument("--input", required=True)
+    target_context.add_argument("--project-root", required=True)
+    target_context.add_argument("--output", required=True)
+    target_context.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
+    target_context.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
+    target_context.set_defaults(func=command_prepare_emotion_target_context512)
 
     prepare_continuous_v3_reviews = sub.add_parser(
         "prepare-continuous-v3-reviews",
@@ -990,7 +1029,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--head-learning-rate", type=float, default=1e-4)
     train.add_argument("--intensity-loss-weight", type=float, default=0.35)
     train.add_argument("--neutral-loss-weight", type=float, default=1.0)
-    train.add_argument("--max-length", type=int, default=256)
+    train.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
     train.add_argument("--seed", type=int, default=20260829)
     train.add_argument("--device")
     train.add_argument("--resume", choices=["auto", "never"], default="never")
@@ -1005,7 +1044,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--include-brighter-test", action="store_true")
     evaluate.add_argument("--output")
     evaluate.add_argument("--batch-size", type=int, default=32)
-    evaluate.add_argument("--max-length", type=int, default=256)
+    evaluate.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
     evaluate.add_argument("--device")
     evaluate.add_argument("--emotion-threshold", type=float, default=0.35)
     evaluate.add_argument("--neutral-threshold", type=float, default=0.15)
@@ -1025,7 +1064,7 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--step", type=float, default=0.005)
     calibrate.add_argument("--minimum-active-recall", type=float, default=0.8)
     calibrate.add_argument("--batch-size", type=int, default=32)
-    calibrate.add_argument("--max-length", type=int, default=256)
+    calibrate.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
     calibrate.add_argument("--device")
     calibrate.add_argument("--progress", action="store_true")
     calibrate.set_defaults(func=command_calibrate_threshold)

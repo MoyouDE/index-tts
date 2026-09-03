@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 from transformers import AutoModelForMaskedLM, AutoTokenizer, get_linear_schedule_with_warmup
 
+from .context_policy import CONTEXT_MAX_LENGTH, ensure_emotion_special_tokens
 from .dataset import EmotionBatchCollator, EmotionDataset
 from .metrics import emotion_metrics
 from .model import DEFAULT_BASE_MODEL, MacBertEmotionModel, masked_emotion_loss, save_checkpoint
@@ -116,7 +117,7 @@ def evaluate_model(
     *,
     device: torch.device,
     batch_size: int = 32,
-    max_length: int = 256,
+    max_length: int = CONTEXT_MAX_LENGTH,
     progress: bool = False,
     description: str = "验证",
     emotion_threshold: float = 0.35,
@@ -151,11 +152,16 @@ def collect_model_predictions(
     *,
     device: torch.device,
     batch_size: int = 32,
-    max_length: int = 256,
+    max_length: int = CONTEXT_MAX_LENGTH,
     progress: bool = False,
     description: str = "预测",
 ) -> dict[str, np.ndarray]:
     model.eval()
+    if any(example.context_sentences for example in examples):
+        ensure_emotion_special_tokens(tokenizer)
+        embedding_count = int(model.encoder.get_input_embeddings().num_embeddings)
+        if len(tokenizer) > embedding_count:
+            raise ValueError("checkpoint 未包含 readest-emotion-v3 special token embeddings")
     loader = DataLoader(
         EmotionDataset(examples),
         batch_size=batch_size,
@@ -203,7 +209,7 @@ def train_supervised(
     warmup_ratio: float = 0.1,
     intensity_loss_weight: float = 0.35,
     neutral_loss_weight: float = 1.0,
-    max_length: int = 256,
+    max_length: int = CONTEXT_MAX_LENGTH,
     seed: int = 20260829,
     device_name: str | None = None,
     resume: str = "never",
@@ -263,7 +269,13 @@ def train_supervised(
         if device.type == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("请求 CUDA 训练，但 PyTorch 无法使用 CUDA")
         tokenizer = AutoTokenizer.from_pretrained(str(base_model), use_fast=True)
-        model = MacBertEmotionModel.from_pretrained(base_model).to(device)
+        uses_target_context = any(example.context_sentences for example in train_examples)
+        if uses_target_context:
+            ensure_emotion_special_tokens(tokenizer)
+        model = MacBertEmotionModel.from_pretrained(base_model)
+        if uses_target_context:
+            model.encoder.resize_token_embeddings(len(tokenizer))
+        model = model.to(device)
         collator = EmotionBatchCollator(tokenizer, max_length=max_length)
         dataset = EmotionDataset(train_examples)
         epoch_batches = epoch_batch_indices(len(dataset), batch_size, seed, 1)

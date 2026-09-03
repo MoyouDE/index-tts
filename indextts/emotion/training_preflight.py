@@ -11,10 +11,14 @@ from typing import Iterable, Sequence
 
 from .annotation import file_sha256
 from .context_policy import (
-    CONTEXT_DELIMITER,
+    CONTEXT_MAX_LENGTH,
     CONTEXT_POLICY,
-    CONTEXT_SENTENCE_LIMIT,
+    LEGACY_CONTEXT_DELIMITER,
+    LEGACY_CONTEXT_POLICY,
+    LEGACY_CONTEXT_SENTENCE_LIMIT,
+    ensure_emotion_special_tokens,
     normalize_context_sentence,
+    select_target_context,
 )
 from .dataset import format_current_text
 from .schema import EMOTION_NAMES, EmotionExample, load_jsonl_examples, validate_work_splits
@@ -135,9 +139,15 @@ def _context_leakage(splits: dict[str, Sequence[EmotionExample]]) -> dict[str, o
     current_text_owners: dict[str, set[str]] = {}
     for split, examples in splits.items():
         for item in examples:
-            context_hash = sha256_text(
-                "\0".join((item.previous_text, item.text, item.sentence_type))
-            )
+            if item.context_sentences:
+                context_value = json.dumps(
+                    [sentence.as_json() for sentence in item.context_sentences],
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            else:
+                context_value = "\0".join((item.previous_text, item.text, item.sentence_type))
+            context_hash = sha256_text(context_value)
             owners.setdefault(context_hash, set()).add(split)
             current_text_owners.setdefault(sha256_text(item.text), set()).add(split)
     return {
@@ -148,19 +158,42 @@ def _context_leakage(splits: dict[str, Sequence[EmotionExample]]) -> dict[str, o
     }
 
 
-def _token_lengths(tokenizer, examples: Sequence[EmotionExample], *, batch_size: int = 512) -> list[int]:
+def _token_lengths(
+    tokenizer,
+    examples: Sequence[EmotionExample],
+    *,
+    max_length: int,
+    batch_size: int = 512,
+) -> list[int]:
     lengths: list[int] = []
-    for start in range(0, len(examples), batch_size):
-        batch = examples[start : start + batch_size]
-        encoded = tokenizer(
-            [item.previous_text for item in batch],
-            [format_current_text(item.text, item.sentence_type) for item in batch],
-            add_special_tokens=True,
-            truncation=False,
-            padding=False,
-            verbose=False,
-        )
-        lengths.extend(len(values) for values in encoded["input_ids"])
+    del batch_size
+    for item in examples:
+        if item.context_sentences:
+            selection = select_target_context(
+                [sentence.as_json() for sentence in item.context_sentences],
+                item.target_sentence_id,
+                lambda text: len(
+                    tokenizer(
+                        text,
+                        add_special_tokens=True,
+                        truncation=False,
+                        padding=False,
+                        verbose=False,
+                    )["input_ids"]
+                ),
+                max_length=max_length,
+            )
+            lengths.append(selection.input_token_count)
+        else:
+            encoded = tokenizer(
+                item.previous_text,
+                format_current_text(item.text, item.sentence_type),
+                add_special_tokens=True,
+                truncation=False,
+                padding=False,
+                verbose=False,
+            )
+            lengths.append(len(encoded["input_ids"]))
     return lengths
 
 
@@ -175,12 +208,45 @@ def _complete_context_summary(
     target_truncation_ids: list[str] = []
     invalid_context_ids: list[str] = []
     for item in examples:
-        raw_sentences = item.previous_text.split(CONTEXT_DELIMITER) if item.previous_text else []
+        if item.context_sentences:
+            records = [sentence.as_json() for sentence in item.context_sentences]
+            try:
+                selection = select_target_context(
+                    records,
+                    item.target_sentence_id,
+                    lambda text: len(
+                        tokenizer(
+                            text,
+                            add_special_tokens=True,
+                            truncation=False,
+                            padding=False,
+                            verbose=False,
+                        )["input_ids"]
+                    ),
+                    max_length=max_length,
+                )
+            except ValueError:
+                invalid_context_ids.append(item.example_id)
+                continue
+            if tuple(selection.selected_sentence_ids) != tuple(
+                sentence.sentence_id for sentence in item.context_sentences
+            ):
+                invalid_context_ids.append(item.example_id)
+            context_counts[len(item.context_sentences)] += 1
+            if selection.target_truncated:
+                target_truncation_ids.append(item.example_id)
+            if selection.input_token_count > max_length:
+                context_truncation_ids.append(item.example_id)
+            continue
+
+        raw_sentences = (
+            item.previous_text.split(LEGACY_CONTEXT_DELIMITER) if item.previous_text else []
+        )
         normalized = [normalize_context_sentence(value) for value in raw_sentences]
         if (
-            len(normalized) > CONTEXT_SENTENCE_LIMIT
+            len(normalized) > LEGACY_CONTEXT_SENTENCE_LIMIT
             or any(not value for value in normalized)
-            or CONTEXT_DELIMITER.join(normalized) != item.previous_text
+            or LEGACY_CONTEXT_DELIMITER.join(normalized) != item.previous_text
         ):
             invalid_context_ids.append(item.example_id)
         context_counts[len(normalized)] += 1
@@ -212,9 +278,11 @@ def _complete_context_summary(
         elif pair_length > max_length:
             context_truncation_ids.append(item.example_id)
     return {
-        "policy": CONTEXT_POLICY,
-        "sentenceLimit": CONTEXT_SENTENCE_LIMIT,
-        "delimiter": CONTEXT_DELIMITER,
+        "policy": (
+            CONTEXT_POLICY
+            if any(item.context_sentences for item in examples)
+            else LEGACY_CONTEXT_POLICY
+        ),
         "contextSentenceCounts": {
             str(count): rows for count, rows in sorted(context_counts.items())
         },
@@ -234,7 +302,7 @@ def preflight_training(
     output_path: str | Path,
     *,
     base_model: str | Path = "hfl/chinese-macbert-base",
-    max_length: int = 256,
+    max_length: int = CONTEXT_MAX_LENGTH,
     verify_base_weights: bool = False,
     minimum_positive: int = 1_000,
     require_cuda: bool = False,
@@ -273,6 +341,13 @@ def preflight_training(
     tokenizer = AutoTokenizer.from_pretrained(
         model_name, local_files_only=True, use_fast=True
     )
+    if any(item.context_sentences for examples in splits.values() for item in examples):
+        ensure_emotion_special_tokens(tokenizer)
+    max_position_embeddings = int(getattr(config, "max_position_embeddings", 0))
+    if max_position_embeddings and max_length > max_position_embeddings:
+        raise ValueError(
+            f"max_length={max_length} 超过基础模型位置上限 {max_position_embeddings}"
+        )
     weight_report: dict[str, object] = {"verified": False}
     if verify_base_weights:
         model = AutoModel.from_pretrained(model_name, local_files_only=True)
@@ -289,7 +364,9 @@ def preflight_training(
         del model
 
     length_report = {
-        split: _length_summary(_token_lengths(tokenizer, examples), max_length)
+        split: _length_summary(
+            _token_lengths(tokenizer, examples, max_length=max_length), max_length
+        )
         for split, examples in splits.items()
     }
     complete_context = {
@@ -387,6 +464,7 @@ def preflight_training(
             "modelType": str(getattr(config, "model_type", "")),
             "hiddenSize": int(getattr(config, "hidden_size", 0)),
             "numHiddenLayers": int(getattr(config, "num_hidden_layers", 0)),
+            "maxPositionEmbeddings": max_position_embeddings,
             "vocabSize": int(getattr(config, "vocab_size", 0)),
         },
         "maxLength": max_length,

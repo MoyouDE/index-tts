@@ -10,12 +10,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .dataset import format_current_text
 from .context_policy import (
-    CONTEXT_DELIMITER,
+    CONTEXT_ENCODING,
     CONTEXT_MAX_LENGTH,
     CONTEXT_POLICY,
-    CONTEXT_SENTENCE_LIMIT,
+    EMOTION_ABI,
+    EMOTION_SPECIAL_TOKENS,
+    ensure_emotion_special_tokens,
+    select_target_context,
 )
 from .model import EmotionOnnxWrapper, load_checkpoint
 from .release import validate_release_approval
@@ -54,11 +56,39 @@ def export_onnx(
     model, tokenizer = load_checkpoint(source)
     model.float().eval()
     wrapper = EmotionOnnxWrapper(model).eval()
+    tokenizer_size = len(tokenizer)
+    special_token_ids = ensure_emotion_special_tokens(tokenizer)
+    if len(tokenizer) != tokenizer_size:
+        raise ValueError("checkpoint tokenizer 缺少情感 special tokens，拒绝在导出时补加")
+    embedding_count = int(model.encoder.get_input_embeddings().num_embeddings)
+    if embedding_count != len(tokenizer):
+        raise ValueError(
+            f"checkpoint embedding/tokenizer 大小不一致: {embedding_count} != {len(tokenizer)}"
+        )
+    sample_sentences = [
+        {
+            "sentenceId": "0",
+            "sectionId": "sample",
+            "lineIndex": 0,
+            "text": "他终于回来了。",
+            "sentenceType": "narration",
+        },
+        {
+            "sentenceId": "1",
+            "sectionId": "sample",
+            "lineIndex": 0,
+            "text": "我就知道！",
+            "sentenceType": "dialogue",
+        },
+    ]
+    selected = select_target_context(
+        sample_sentences,
+        "0",
+        lambda text: len(tokenizer(text, add_special_tokens=True)["input_ids"]),
+    )
     sample = tokenizer(
-        ["夜色渐深。"],
-        [format_current_text("他终于回来了。", "narration")],
-        max_length=256,
-        truncation=True,
+        [selected.rendered_text],
+        truncation=False,
         padding=True,
         return_tensors="pt",
     )
@@ -87,6 +117,7 @@ def export_onnx(
         "tokenizer.json",
         "tokenizer_config.json",
         "special_tokens_map.json",
+        "added_tokens.json",
         "vocab.txt",
     ):
         candidate = source / name
@@ -100,10 +131,13 @@ def export_onnx(
         "schemaVersion": 1,
         "package": "readest-macbert-emotion",
         "version": version,
-        "conditioningAbi": "readest-emotion-v2",
+        "conditioningAbi": EMOTION_ABI,
         "contextPolicy": CONTEXT_POLICY,
-        "contextSentenceLimit": CONTEXT_SENTENCE_LIMIT,
-        "contextDelimiter": CONTEXT_DELIMITER,
+        "contextEncoding": CONTEXT_ENCODING,
+        "specialTokens": list(EMOTION_SPECIAL_TOKENS),
+        "specialTokenIds": special_token_ids,
+        "sectionBoundary": "strict",
+        "sameLineNextOnly": True,
         "language": "zh",
         "precision": "fp32",
         "maxLength": CONTEXT_MAX_LENGTH,
@@ -143,16 +177,31 @@ def verify_onnx(
     target = Path(model_dir)
     model, tokenizer = load_checkpoint(source)
     model.float().eval()
-    previous = ["她握紧了拳头。", "雨停了。"]
-    current = [
-        format_current_text("你怎么敢这样骗我！", "dialogue"),
-        format_current_text("湖面重新恢复了宁静。", "narration"),
+    tokenizer_size = len(tokenizer)
+    ensure_emotion_special_tokens(tokenizer)
+    if len(tokenizer) != tokenizer_size:
+        raise ValueError("checkpoint tokenizer 缺少情感 special tokens")
+    sections = [
+        [
+            {"sentenceId": "0", "sectionId": "a", "lineIndex": 0, "text": "她握紧了拳头。", "sentenceType": "narration"},
+            {"sentenceId": "1", "sectionId": "a", "lineIndex": 0, "text": "你怎么敢这样骗我！", "sentenceType": "dialogue"},
+        ],
+        [
+            {"sentenceId": "0", "sectionId": "b", "lineIndex": 0, "text": "雨停了。", "sentenceType": "narration"},
+            {"sentenceId": "1", "sectionId": "b", "lineIndex": 1, "text": "湖面重新恢复了宁静。", "sentenceType": "narration"},
+        ],
+    ]
+    rendered = [
+        select_target_context(
+            section,
+            "1",
+            lambda text: len(tokenizer(text, add_special_tokens=True)["input_ids"]),
+        ).rendered_text
+        for section in sections
     ]
     batch = tokenizer(
-        previous,
-        current,
-        max_length=128,
-        truncation=True,
+        rendered,
+        truncation=False,
         padding=True,
         return_tensors="pt",
     )

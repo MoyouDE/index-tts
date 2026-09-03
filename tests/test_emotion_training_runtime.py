@@ -252,11 +252,12 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
 
     inner = (root / "_train_emotion_inner.bat").read_bytes().decode("gbk")
     for expected in (
-        'set "NOVEL_TRAIN=outputs/emotion-data/training-ready-v2/train.jsonl"',
-        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-v2"',
+        'set "NOVEL_TRAIN=outputs/emotion-data/training-ready-v3-novel-tgt-context512/train.jsonl"',
+        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-v3-tgt-context512"',
         'set "EPOCHS=8"',
-        'set "BATCH_SIZE=12"',
-        'set "GRADIENT_ACCUMULATION=2"',
+        'set "BATCH_SIZE=6"',
+        'set "GRADIENT_ACCUMULATION=4"',
+        'set "MAX_LENGTH=512"',
         'set "LEARNING_RATE=2e-5"',
         'set "HEAD_LEARNING_RATE=1e-4"',
         'set "INTENSITY_LOSS_WEIGHT=0.7"',
@@ -264,10 +265,12 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
         'set "MIN_FREE_VRAM_GIB=9"',
         "--resume auto",
         "--checkpoint-steps %CHECKPOINT_STEPS%",
+        "--require-complete-context",
         "--minimum-active-recall 0.8",
         '--threshold-output "%THRESHOLD_VALUE%"',
         "--neutral-threshold %NEUTRAL_THRESHOLD%",
         "--progress",
     ):
         assert expected in inner
+    assert "BRIGHTER" not in inner
     assert "--release" not in inner

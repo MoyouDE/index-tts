@@ -10,12 +10,14 @@ from pathlib import Path
 from typing import Sequence
 
 from indextts.emotion.context_policy import (
-    CONTEXT_DELIMITER,
+    CONTEXT_ENCODING,
     CONTEXT_MAX_LENGTH,
     CONTEXT_POLICY,
-    CONTEXT_SENTENCE_LIMIT,
+    EMOTION_ABI,
+    EMOTION_SPECIAL_TOKENS,
+    ensure_emotion_special_tokens,
     normalize_context_sentence,
-    select_complete_context,
+    select_target_context,
 )
 
 
@@ -79,7 +81,7 @@ class OnnxEmotionProvider(EmotionProvider):
         candidate = Path(model_path).resolve()
         self.model_dir = candidate.parent if candidate.is_file() else candidate
         self.neutral_threshold = None if neutral_threshold is None else float(neutral_threshold)
-        self.max_length = 256
+        self.max_length = CONTEXT_MAX_LENGTH
         self._session = None
         self._tokenizer = None
         self.warning = None
@@ -96,7 +98,7 @@ class OnnxEmotionProvider(EmotionProvider):
         manifest_path = self.model_dir / "emotion_model.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if (
-            manifest.get("conditioningAbi") != "readest-emotion-v2"
+            manifest.get("conditioningAbi") != EMOTION_ABI
             or manifest.get("labels") != EMOTION_NAMES
             or manifest.get("precision") != "fp32"
             or manifest.get("releaseStatus") != "approved"
@@ -104,13 +106,15 @@ class OnnxEmotionProvider(EmotionProvider):
             raise ValueError("ONNX 情感模型 manifest ABI、精度或发布状态无效")
         if (
             manifest.get("contextPolicy") != CONTEXT_POLICY
-            or manifest.get("contextSentenceLimit") != CONTEXT_SENTENCE_LIMIT
-            or manifest.get("contextDelimiter") != CONTEXT_DELIMITER
+            or manifest.get("contextEncoding") != CONTEXT_ENCODING
+            or manifest.get("specialTokens") != list(EMOTION_SPECIAL_TOKENS)
+            or manifest.get("sectionBoundary") != "strict"
+            or manifest.get("sameLineNextOnly") is not True
         ):
             raise ValueError("ONNX 情感模型上文策略无效")
         if self.neutral_threshold is None:
             self.neutral_threshold = float(manifest.get("neutralThreshold", 0.15))
-        self.max_length = int(manifest.get("maxLength", 256))
+        self.max_length = int(manifest.get("maxLength", 0))
         if self.max_length != CONTEXT_MAX_LENGTH:
             raise ValueError(f"ONNX 情感模型 manifest 的 maxLength 必须为 {CONTEXT_MAX_LENGTH}")
         for name, metadata in manifest.get("files", {}).items():
@@ -130,31 +134,28 @@ class OnnxEmotionProvider(EmotionProvider):
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.model_dir, local_files_only=True, use_fast=True
         )
+        tokenizer_size = len(self._tokenizer)
+        token_ids = ensure_emotion_special_tokens(self._tokenizer)
+        if len(self._tokenizer) != tokenizer_size or token_ids != manifest.get("specialTokenIds"):
+            raise ValueError("ONNX 情感 tokenizer special token ABI 无效")
         self._session = ort.InferenceSession(
             str(self.model_dir / "emotion.onnx"), providers=["CPUExecutionProvider"]
         )
 
-    def analyze_context(
+    def analyze_window(
         self,
-        previous_sentences: Sequence[str] | str,
-        text: str,
-        sentence_type: str = "narration",
+        sentences: Sequence[dict[str, object]],
+        target_sentence_id: object,
     ) -> list[float]:
         self._load()
         import numpy as np
 
-        current = ("[对白]" if sentence_type == "dialogue" else "[旁白]") + normalize_context_sentence(text)
-        source_sentences = (
-            previous_sentences.split(CONTEXT_DELIMITER)
-            if isinstance(previous_sentences, str)
-            else list(previous_sentences)
-        )
-        selection = select_complete_context(
-            source_sentences,
-            lambda previous_text: len(
+        selection = select_target_context(
+            sentences,
+            target_sentence_id,
+            lambda rendered: len(
                 self._tokenizer(
-                    previous_text,
-                    current,
+                    rendered,
                     add_special_tokens=True,
                     truncation=False,
                     padding=False,
@@ -164,10 +165,8 @@ class OnnxEmotionProvider(EmotionProvider):
             max_length=self.max_length,
         )
         batch = self._tokenizer(
-            [selection.previous_text],
-            [current],
-            max_length=self.max_length,
-            truncation=True,
+            [selection.rendered_text],
+            truncation=False,
             padding=True,
             return_tensors="np",
         )
@@ -188,6 +187,42 @@ class OnnxEmotionProvider(EmotionProvider):
         if float(intensity[0, 0]) < float(self.neutral_threshold):
             return [0.0] * 8
         return [max(0.0, min(1.0, float(value))) for value in vector[0]]
+
+    def analyze_context(
+        self,
+        previous_sentences: Sequence[str] | str,
+        text: str,
+        sentence_type: str = "narration",
+    ) -> list[float]:
+        """Compatibility adapter for non-reader callers without a next sentence."""
+
+        source = (
+            previous_sentences.split("\n")
+            if isinstance(previous_sentences, str)
+            else list(previous_sentences)
+        )
+        sentences = [
+            {
+                "sentenceId": str(index),
+                "sectionId": "compat",
+                "lineIndex": index,
+                "text": normalize_context_sentence(value),
+                "sentenceType": "narration",
+            }
+            for index, value in enumerate(source)
+            if normalize_context_sentence(value)
+        ]
+        target_id = str(len(sentences))
+        sentences.append(
+            {
+                "sentenceId": target_id,
+                "sectionId": "compat",
+                "lineIndex": len(sentences),
+                "text": normalize_context_sentence(text),
+                "sentenceType": sentence_type,
+            }
+        )
+        return self.analyze_window(sentences, target_id)
 
     def analyze(self, text: str) -> list[float]:
         return self.analyze_context("", text, "narration")

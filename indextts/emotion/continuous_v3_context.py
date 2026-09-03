@@ -13,10 +13,9 @@ from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
 from .context_policy import (
-    CONTEXT_DELIMITER,
-    CONTEXT_MAX_LENGTH,
-    CONTEXT_POLICY,
-    CONTEXT_SENTENCE_LIMIT,
+    LEGACY_CONTEXT_DELIMITER as CONTEXT_DELIMITER,
+    LEGACY_CONTEXT_POLICY as CONTEXT_POLICY,
+    LEGACY_CONTEXT_SENTENCE_LIMIT as CONTEXT_SENTENCE_LIMIT,
     select_complete_context,
 )
 from .dataset import format_current_text
@@ -29,6 +28,7 @@ AUDIT_SCHEMA = "readest-emotion-continuous-context-audit-v1"
 EXPECTED_NOVEL_SPLITS = {"train": 13_496, "dev": 2_896, "test": 4_126}
 EXPECTED_CONTEXT_COUNTS = {"0": 522, "1": 790, "2": 973, "3": 18_233}
 EXPECTED_TARGET_TRUNCATED = 10
+SNAPSHOT_MAX_LENGTH = 256
 
 _ID = re.compile(r"^emotion-candidate-.+-r(?P<row>\d{6})-s(?P<sentence>\d{6})$")
 
@@ -277,13 +277,13 @@ def expand_continuous_v3_context(
     output_dir: str | Path,
     *,
     base_model: str | Path = "hfl/chinese-macbert-base",
-    max_length: int = CONTEXT_MAX_LENGTH,
+    max_length: int = SNAPSHOT_MAX_LENGTH,
     verify_expected_distribution: bool = True,
 ) -> dict[str, object]:
     """Materialize a novel-only r2 snapshot with up to three complete contexts."""
 
-    if max_length != CONTEXT_MAX_LENGTH:
-        raise ValueError(f"该快照固定 max_length={CONTEXT_MAX_LENGTH}")
+    if max_length != SNAPSHOT_MAX_LENGTH:
+        raise ValueError(f"当前已物化快照固定 max_length={SNAPSHOT_MAX_LENGTH}")
     source_dir = Path(source_root)
     target = Path(output_dir)
     if target.exists():

@@ -11,6 +11,8 @@ from typing import Iterable, Mapping, Sequence
 SCHEMA_VERSION = 1
 CONTINUOUS_SCHEMA_VERSION = 3
 CONTINUOUS_SCHEMA = "readest-emotion-continuous-v3"
+TARGET_CONTEXT_SCHEMA_VERSION = 1
+TARGET_CONTEXT_SCHEMA = "readest-emotion-target-context-v1"
 EMOTION_NAMES = (
     "happy",
     "angry",
@@ -34,6 +36,24 @@ LICENSE_STATUSES = frozenset({"approved", "pending", "test-only"})
 
 
 @dataclass(frozen=True)
+class EmotionContextSentence:
+    sentence_id: str
+    section_id: str
+    line_index: int
+    text: str
+    sentence_type: str
+
+    def as_json(self) -> dict[str, object]:
+        return {
+            "sentenceId": self.sentence_id,
+            "sectionId": self.section_id,
+            "lineIndex": self.line_index,
+            "text": self.text,
+            "sentenceType": self.sentence_type,
+        }
+
+
+@dataclass(frozen=True)
 class EmotionExample:
     example_id: str
     work_id: str
@@ -49,8 +69,25 @@ class EmotionExample:
     annotation_status: str = ""
     adjudication_chosen_source: str | None = None
     adjudication_confidence: str | None = None
+    context_sentences: tuple[EmotionContextSentence, ...] = ()
+    target_sentence_id: str | None = None
+    section_id: str | None = None
 
     def as_json(self) -> dict[str, object]:
+        if self.context_sentences:
+            return {
+                "schema": TARGET_CONTEXT_SCHEMA,
+                "schemaVersion": TARGET_CONTEXT_SCHEMA_VERSION,
+                "id": self.example_id,
+                "workId": self.work_id,
+                "sectionId": self.section_id,
+                "sentences": [sentence.as_json() for sentence in self.context_sentences],
+                "targetSentenceId": self.target_sentence_id,
+                "emotions": dict(zip(EMOTION_NAMES, self.labels)),
+                "licenseId": self.license_id,
+                "licenseStatus": self.license_status,
+                "source": self.source,
+            }
         record = {
             "schemaVersion": SCHEMA_VERSION,
             "id": self.example_id,
@@ -75,6 +112,8 @@ class EmotionExample:
 
 
 def _bounded_number(value: object, field: str, *, maximum: float = 1.0) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{field} 必须是数值且不能是布尔值")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
@@ -116,9 +155,12 @@ def _emotion_values(
 
 def parse_example(record: Mapping[str, object], *, origin: str = "<memory>") -> EmotionExample:
     schema_version = int(record.get("schemaVersion", SCHEMA_VERSION))
-    if schema_version not in {SCHEMA_VERSION, CONTINUOUS_SCHEMA_VERSION}:
+    is_target_context = record.get("schema") == TARGET_CONTEXT_SCHEMA
+    if not is_target_context and schema_version not in {SCHEMA_VERSION, CONTINUOUS_SCHEMA_VERSION}:
         raise ValueError(f"不支持的 schemaVersion={schema_version}: {origin}")
-    is_continuous_v3 = schema_version == CONTINUOUS_SCHEMA_VERSION
+    if is_target_context and schema_version != TARGET_CONTEXT_SCHEMA_VERSION:
+        raise ValueError(f"目标上下文 schemaVersion 无效: {origin}")
+    is_continuous_v3 = not is_target_context and schema_version == CONTINUOUS_SCHEMA_VERSION
     if is_continuous_v3:
         if record.get("schema") != CONTINUOUS_SCHEMA:
             raise ValueError(f"连续 v3 schema 无效: {origin}")
@@ -128,11 +170,80 @@ def parse_example(record: Mapping[str, object], *, origin: str = "<memory>") -> 
                 f"连续 v3 不得包含旧标签字段 {sorted(legacy_labels)}: {origin}"
             )
 
+    if is_target_context:
+        legacy_labels = {"labelMask", "intensity", "primaryEmotion"}.intersection(record)
+        if legacy_labels:
+            raise ValueError(
+                f"目标上下文数据不得包含旧标签字段 {sorted(legacy_labels)}: {origin}"
+            )
+        legacy_context = {"previousText", "text", "sentenceType"}.intersection(record)
+        if legacy_context:
+            raise ValueError(
+                f"目标上下文数据不得包含旧上下文字段 {sorted(legacy_context)}: {origin}"
+            )
+
     example_id = str(record.get("id", "")).strip()
     work_id = str(record.get("workId", "")).strip()
-    text = str(record.get("text", "")).strip()
-    previous_text = str(record.get("previousText", "")).strip()
-    sentence_type = str(record.get("sentenceType", "")).strip()
+    context_sentences: tuple[EmotionContextSentence, ...] = ()
+    target_sentence_id: str | None = None
+    section_id: str | None = None
+    if is_target_context:
+        raw_sentences = record.get("sentences")
+        if not isinstance(raw_sentences, list) or not raw_sentences:
+            raise ValueError(f"目标上下文 sentences 必须是非空数组: {origin}")
+        parsed_sentences: list[EmotionContextSentence] = []
+        seen_sentence_ids: set[str] = set()
+        for index, raw in enumerate(raw_sentences):
+            if not isinstance(raw, Mapping):
+                raise ValueError(f"sentences[{index}] 必须是对象: {origin}")
+            sentence_id = str(raw.get("sentenceId", "")).strip()
+            current_section_id = str(raw.get("sectionId", "")).strip()
+            current_text = str(raw.get("text", "")).strip()
+            current_type = str(raw.get("sentenceType", "")).strip()
+            line_value = raw.get("lineIndex")
+            if (
+                not sentence_id
+                or sentence_id in seen_sentence_ids
+                or not current_section_id
+                or not current_text
+                or current_type not in SENTENCE_TYPES
+                or isinstance(line_value, bool)
+            ):
+                raise ValueError(f"sentences[{index}] 字段无效: {origin}")
+            try:
+                line_index = int(line_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"sentences[{index}].lineIndex 无效: {origin}") from exc
+            if line_index < 0:
+                raise ValueError(f"sentences[{index}].lineIndex 不能为负数: {origin}")
+            seen_sentence_ids.add(sentence_id)
+            parsed_sentences.append(
+                EmotionContextSentence(
+                    sentence_id=sentence_id,
+                    section_id=current_section_id,
+                    line_index=line_index,
+                    text=current_text,
+                    sentence_type=current_type,
+                )
+            )
+        section_ids = {sentence.section_id for sentence in parsed_sentences}
+        if len(section_ids) != 1:
+            raise ValueError(f"目标上下文不得跨 section: {origin}")
+        section_id = next(iter(section_ids))
+        if str(record.get("sectionId", "")).strip() != section_id:
+            raise ValueError(f"顶层 sectionId 与 sentences 不一致: {origin}")
+        target_sentence_id = str(record.get("targetSentenceId", "")).strip()
+        targets = [s for s in parsed_sentences if s.sentence_id == target_sentence_id]
+        if len(targets) != 1:
+            raise ValueError(f"targetSentenceId 必须在 sentences 中唯一出现: {origin}")
+        context_sentences = tuple(parsed_sentences)
+        text = targets[0].text
+        sentence_type = targets[0].sentence_type
+        previous_text = ""
+    else:
+        text = str(record.get("text", "")).strip()
+        previous_text = str(record.get("previousText", "")).strip()
+        sentence_type = str(record.get("sentenceType", "")).strip()
     license_id = str(record.get("licenseId", "")).strip().upper()
     license_status = str(record.get("licenseStatus", "approved")).strip().lower()
     source = str(record.get("source", "")).strip()
@@ -181,6 +292,9 @@ def parse_example(record: Mapping[str, object], *, origin: str = "<memory>") -> 
         annotation_status=annotation_status,
         adjudication_chosen_source=adjudication_chosen_source,
         adjudication_confidence=adjudication_confidence,
+        context_sentences=context_sentences,
+        target_sentence_id=target_sentence_id,
+        section_id=section_id,
     )
 
 

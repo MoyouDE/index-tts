@@ -5,13 +5,61 @@ from pathlib import Path
 
 import pytest
 
-from indextts.emotion.context_policy import select_complete_context
+from indextts.emotion.cli import build_parser
+from indextts.emotion.context_policy import (
+    CONTEXT_MAX_LENGTH,
+    render_target_context,
+    select_complete_context,
+    select_target_context,
+)
 from indextts.emotion.continuous_v3_context import _expand_record
+from indextts.emotion.dataset import EmotionBatchCollator
 from indextts.emotion.training_preflight import _complete_context_summary
 
 
 def _count(previous_text: str) -> int:
     return 4 + len(previous_text)
+
+
+def test_production_model_input_budget_is_512():
+    from indextts.runtime.emotion import OnnxEmotionProvider
+
+    assert CONTEXT_MAX_LENGTH == 512
+    assert EmotionBatchCollator(object()).max_length == 512
+    assert OnnxEmotionProvider("unused-model-directory").max_length == 512
+    parser = build_parser()
+    assert parser.parse_args(["train", "--output", "run"]).max_length == 512
+    assert (
+        parser.parse_args(
+            [
+                "preflight-training",
+                "--train",
+                "train.jsonl",
+                "--dev",
+                "dev.jsonl",
+                "--test",
+                "test.jsonl",
+                "--output",
+                "preflight.json",
+            ]
+        ).max_length
+        == 512
+    )
+    assert parser.parse_args(["evaluate", "--checkpoint", "best"]).max_length == 512
+    assert (
+        parser.parse_args(
+            [
+                "calibrate-threshold",
+                "--checkpoint",
+                "best",
+                "--data",
+                "dev.jsonl",
+                "--output",
+                "calibration.json",
+            ]
+        ).max_length
+        == 512
+    )
 
 
 def test_selects_nearest_three_complete_sentences_in_chronological_order():
@@ -76,6 +124,62 @@ def test_shared_python_rust_context_fixture():
         assert selected.target_token_count == case["expectedTargetTokenCount"], case["name"]
         assert selected.context_limited is case["expectedContextLimited"], case["name"]
         assert selected.target_truncated is case["expectedTargetTruncated"], case["name"]
+
+
+def test_shared_python_rust_target_context_fixture():
+    fixture_path = Path(__file__).resolve().parents[2] / "fixtures" / "emotion-target-context-v3.json"
+    cases = json.loads(fixture_path.read_text(encoding="utf-8"))
+    for case in cases:
+        counts = case["tokenCounts"]
+        sentences = [
+            {
+                "sentenceId": value["id"],
+                "sectionId": "fixture",
+                "lineIndex": value["lineIndex"],
+                "text": value["text"],
+                "sentenceType": value["sentenceType"],
+            }
+            for value in case["sentences"]
+        ]
+        selected = select_target_context(
+            sentences,
+            case["targetSentenceId"],
+            lambda rendered: counts[rendered],
+            max_length=case["maxLength"],
+        )
+        assert selected.rendered_text == case["expectedRenderedText"], case["name"]
+        assert list(selected.selected_sentence_ids) == case["expectedSentenceIds"], case["name"]
+        assert selected.input_token_count == case["expectedInputTokenCount"], case["name"]
+        assert selected.target_token_count == case["expectedTargetTokenCount"], case["name"]
+        assert selected.next_sentence_included is case["expectedNextSentenceIncluded"], case["name"]
+        assert selected.context_limited is case["expectedContextLimited"], case["name"]
+
+
+def test_target_context_keeps_chronology_and_marks_paragraph_boundaries():
+    sentences = [
+        {"sentenceId": 0, "sectionId": "a", "lineIndex": 0, "text": "更早。", "sentenceType": "narration"},
+        {"sentenceId": 1, "sectionId": "a", "lineIndex": 1, "text": "前句。", "sentenceType": "narration"},
+        {"sentenceId": 2, "sectionId": "a", "lineIndex": 1, "text": "你他妈的！", "sentenceType": "dialogue"},
+        {"sentenceId": 3, "sectionId": "a", "lineIndex": 1, "text": "XX笑着说。", "sentenceType": "narration"},
+    ]
+    selected = select_target_context(sentences, 2, lambda text: len(text), max_length=200)
+    assert selected.selected_positions == (0, 1, 2, 3)
+    assert selected.next_sentence_included is True
+    assert selected.rendered_text == (
+        "[旁白]更早。[NL][旁白]前句。[TGT][对白]你他妈的！[/TGT][旁白]XX笑着说。"
+    )
+
+
+def test_target_context_rejects_cross_section_input():
+    with pytest.raises(ValueError, match="不得跨 section"):
+        select_target_context(
+            [
+                {"sentenceId": 0, "sectionId": "a", "lineIndex": 0, "text": "前句。", "sentenceType": "narration"},
+                {"sentenceId": 1, "sectionId": "b", "lineIndex": 0, "text": "目标。", "sentenceType": "narration"},
+            ],
+            1,
+            len,
+        )
 
 
 class _CharacterTokenizer:
@@ -191,24 +295,18 @@ def test_python_onnx_runtime_applies_complete_sentence_budget(tmp_path):
     from indextts.runtime.emotion import OnnxEmotionProvider
 
     class Tokenizer:
-        final_previous = None
+        final_rendered = None
 
-        def __call__(self, first, second, **kwargs):
+        def __call__(self, first, **kwargs):
             if isinstance(first, list):
-                self.final_previous = first[0]
+                self.final_rendered = first[0]
                 length = 12
                 return {
                     "input_ids": np.zeros((1, length), dtype=np.int64),
                     "attention_mask": np.ones((1, length), dtype=np.int64),
                     "token_type_ids": np.zeros((1, length), dtype=np.int64),
                 }
-            counts = {
-                "": 5,
-                "near": 8,
-                "middle\nnear": 12,
-                "old\nmiddle\nnear": 300,
-            }
-            return {"input_ids": list(range(counts[first]))}
+            return {"input_ids": list(range(len(first)))}
 
     class Session:
         def run(self, _outputs, _inputs):
@@ -221,10 +319,17 @@ def test_python_onnx_runtime_applies_complete_sentence_budget(tmp_path):
     provider = OnnxEmotionProvider(tmp_path)
     provider._tokenizer = tokenizer
     provider._session = Session()
-    provider.max_length = 256
+    provider.max_length = 80
     provider.neutral_threshold = 0.15
 
-    vector = provider.analyze_context(["old", "middle", "near"], " target\ttext ")
+    vector = provider.analyze_window(
+        [
+            {"sentenceId": "0", "sectionId": "a", "lineIndex": 0, "text": "old", "sentenceType": "narration"},
+            {"sentenceId": "1", "sectionId": "a", "lineIndex": 1, "text": "target text", "sentenceType": "dialogue"},
+            {"sentenceId": "2", "sectionId": "a", "lineIndex": 1, "text": "smiled", "sentenceType": "narration"},
+        ],
+        "1",
+    )
 
-    assert tokenizer.final_previous == "middle\nnear"
+    assert tokenizer.final_rendered == "[旁白]old[NL][TGT][对白]target text[/TGT][旁白]smiled"
     assert vector[0] == pytest.approx(0.2)
