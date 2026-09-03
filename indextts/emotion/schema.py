@@ -9,6 +9,8 @@ from typing import Iterable, Mapping, Sequence
 
 
 SCHEMA_VERSION = 1
+CONTINUOUS_SCHEMA_VERSION = 3
+CONTINUOUS_SCHEMA = "readest-emotion-continuous-v3"
 EMOTION_NAMES = (
     "happy",
     "angry",
@@ -114,8 +116,17 @@ def _emotion_values(
 
 def parse_example(record: Mapping[str, object], *, origin: str = "<memory>") -> EmotionExample:
     schema_version = int(record.get("schemaVersion", SCHEMA_VERSION))
-    if schema_version != SCHEMA_VERSION:
+    if schema_version not in {SCHEMA_VERSION, CONTINUOUS_SCHEMA_VERSION}:
         raise ValueError(f"不支持的 schemaVersion={schema_version}: {origin}")
+    is_continuous_v3 = schema_version == CONTINUOUS_SCHEMA_VERSION
+    if is_continuous_v3:
+        if record.get("schema") != CONTINUOUS_SCHEMA:
+            raise ValueError(f"连续 v3 schema 无效: {origin}")
+        legacy_labels = {"labelMask", "intensity", "primaryEmotion"}.intersection(record)
+        if legacy_labels:
+            raise ValueError(
+                f"连续 v3 不得包含旧标签字段 {sorted(legacy_labels)}: {origin}"
+            )
 
     example_id = str(record.get("id", "")).strip()
     work_id = str(record.get("workId", "")).strip()

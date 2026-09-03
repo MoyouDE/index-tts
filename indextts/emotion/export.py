@@ -11,6 +11,12 @@ import numpy as np
 import torch
 
 from .dataset import format_current_text
+from .context_policy import (
+    CONTEXT_DELIMITER,
+    CONTEXT_MAX_LENGTH,
+    CONTEXT_POLICY,
+    CONTEXT_SENTENCE_LIMIT,
+)
 from .model import EmotionOnnxWrapper, load_checkpoint
 from .release import validate_release_approval
 from .schema import EMOTION_NAMES
@@ -94,10 +100,13 @@ def export_onnx(
         "schemaVersion": 1,
         "package": "readest-macbert-emotion",
         "version": version,
-        "conditioningAbi": "readest-emotion-v1",
+        "conditioningAbi": "readest-emotion-v2",
+        "contextPolicy": CONTEXT_POLICY,
+        "contextSentenceLimit": CONTEXT_SENTENCE_LIMIT,
+        "contextDelimiter": CONTEXT_DELIMITER,
         "language": "zh",
         "precision": "fp32",
-        "maxLength": 256,
+        "maxLength": CONTEXT_MAX_LENGTH,
         "neutralThreshold": float(neutral_threshold),
         "labels": list(EMOTION_NAMES),
         "inputs": ["input_ids", "attention_mask", "token_type_ids"],

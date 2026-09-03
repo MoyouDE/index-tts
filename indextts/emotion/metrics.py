@@ -79,12 +79,92 @@ def emotion_metrics(
         else 0.0
     )
     return {
+        "emotionThreshold": float(threshold),
+        "neutralThreshold": float(neutral_threshold),
         "macroF1": float(np.mean(f1_values)) if f1_values else 0.0,
         "macroSpearman": float(np.mean(correlations)) if correlations else 0.0,
         "intensityMae": float(np.abs(intensities - predicted_intensities).mean()),
         "neutralFalseActivationRate": false_activation,
         "perEmotion": per_emotion,
         "sampleCount": int(predictions.shape[0]),
+    }
+
+
+def calibrate_neutral_threshold(
+    intensities: np.ndarray,
+    predicted_intensities: np.ndarray,
+    *,
+    minimum: float = 0.05,
+    maximum: float = 0.8,
+    step: float = 0.005,
+    minimum_active_recall: float = 0.8,
+) -> dict[str, object]:
+    """Minimize base false activation while retaining required active recall."""
+
+    if not 0.0 <= minimum <= maximum <= 1.0:
+        raise ValueError("校准阈值范围必须位于 [0, 1] 且 minimum <= maximum")
+    if step <= 0.0:
+        raise ValueError("校准步长必须为正数")
+    if not 0.0 <= minimum_active_recall <= 1.0:
+        raise ValueError("minimum_active_recall 必须位于 [0, 1]")
+    expected = np.asarray(intensities, dtype=np.float64).reshape(-1) > 0.05
+    predicted = np.asarray(predicted_intensities, dtype=np.float64).reshape(-1)
+    if expected.shape != predicted.shape or expected.size == 0:
+        raise ValueError("校准输入必须是长度一致的非空数组")
+    active_count = int(expected.sum())
+    base_count = int((~expected).sum())
+    if not active_count or not base_count:
+        raise ValueError("校准集必须同时包含 active 与 base 样本")
+
+    thresholds = np.arange(minimum, maximum + step * 0.5, step, dtype=np.float64)
+    rows: list[dict[str, float]] = []
+    for threshold in thresholds:
+        actual = predicted >= threshold
+        true_positive = int(np.logical_and(expected, actual).sum())
+        false_positive = int(np.logical_and(~expected, actual).sum())
+        false_negative = active_count - true_positive
+        recall = true_positive / active_count
+        false_activation = false_positive / base_count
+        specificity = 1.0 - false_activation
+        precision_denominator = true_positive + false_positive
+        precision = true_positive / precision_denominator if precision_denominator else 0.0
+        f1_denominator = 2 * true_positive + false_positive + false_negative
+        active_f1 = 2 * true_positive / f1_denominator if f1_denominator else 0.0
+        rows.append(
+            {
+                "threshold": float(round(threshold, 10)),
+                "balancedAccuracy": (recall + specificity) / 2.0,
+                "activeRecall": recall,
+                "activePrecision": precision,
+                "activeF1": active_f1,
+                "neutralFalseActivationRate": false_activation,
+            }
+        )
+    eligible = [row for row in rows if row["activeRecall"] >= minimum_active_recall]
+    if not eligible:
+        maximum_recall = max(row["activeRecall"] for row in rows)
+        raise ValueError(
+            "校准范围内无法满足主动情感召回率要求: "
+            f"required={minimum_active_recall:g}, maximum={maximum_recall:g}"
+        )
+    best = min(
+        eligible,
+        key=lambda row: (
+            row["neutralFalseActivationRate"],
+            -row["balancedAccuracy"],
+            -row["threshold"],
+        ),
+    )
+    return {
+        "selectionPolicy": "minimum-neutral-far-subject-to-active-recall",
+        "minimumActiveRecall": minimum_active_recall,
+        "activeExamples": active_count,
+        "baseExamples": base_count,
+        "minimum": minimum,
+        "maximum": maximum,
+        "step": step,
+        "recommended": best,
+        "curve": rows,
     }
 
 

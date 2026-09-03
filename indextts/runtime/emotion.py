@@ -9,6 +9,15 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Sequence
 
+from indextts.emotion.context_policy import (
+    CONTEXT_DELIMITER,
+    CONTEXT_MAX_LENGTH,
+    CONTEXT_POLICY,
+    CONTEXT_SENTENCE_LIMIT,
+    normalize_context_sentence,
+    select_complete_context,
+)
+
 
 EMOTION_NAMES = [
     "happy",
@@ -87,17 +96,23 @@ class OnnxEmotionProvider(EmotionProvider):
         manifest_path = self.model_dir / "emotion_model.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if (
-            manifest.get("conditioningAbi") != "readest-emotion-v1"
+            manifest.get("conditioningAbi") != "readest-emotion-v2"
             or manifest.get("labels") != EMOTION_NAMES
             or manifest.get("precision") != "fp32"
             or manifest.get("releaseStatus") != "approved"
         ):
             raise ValueError("ONNX 情感模型 manifest ABI、精度或发布状态无效")
+        if (
+            manifest.get("contextPolicy") != CONTEXT_POLICY
+            or manifest.get("contextSentenceLimit") != CONTEXT_SENTENCE_LIMIT
+            or manifest.get("contextDelimiter") != CONTEXT_DELIMITER
+        ):
+            raise ValueError("ONNX 情感模型上文策略无效")
         if self.neutral_threshold is None:
             self.neutral_threshold = float(manifest.get("neutralThreshold", 0.15))
         self.max_length = int(manifest.get("maxLength", 256))
-        if not 1 <= self.max_length <= 512:
-            raise ValueError("ONNX 情感模型 manifest 的 maxLength 必须位于 [1, 512]")
+        if self.max_length != CONTEXT_MAX_LENGTH:
+            raise ValueError(f"ONNX 情感模型 manifest 的 maxLength 必须为 {CONTEXT_MAX_LENGTH}")
         for name, metadata in manifest.get("files", {}).items():
             if (
                 Path(name).name != name
@@ -121,16 +136,35 @@ class OnnxEmotionProvider(EmotionProvider):
 
     def analyze_context(
         self,
-        previous_text: str,
+        previous_sentences: Sequence[str] | str,
         text: str,
         sentence_type: str = "narration",
     ) -> list[float]:
         self._load()
         import numpy as np
 
-        current = ("[对白]" if sentence_type == "dialogue" else "[旁白]") + text.strip()
+        current = ("[对白]" if sentence_type == "dialogue" else "[旁白]") + normalize_context_sentence(text)
+        source_sentences = (
+            previous_sentences.split(CONTEXT_DELIMITER)
+            if isinstance(previous_sentences, str)
+            else list(previous_sentences)
+        )
+        selection = select_complete_context(
+            source_sentences,
+            lambda previous_text: len(
+                self._tokenizer(
+                    previous_text,
+                    current,
+                    add_special_tokens=True,
+                    truncation=False,
+                    padding=False,
+                    verbose=False,
+                )["input_ids"]
+            ),
+            max_length=self.max_length,
+        )
         batch = self._tokenizer(
-            [previous_text.strip()],
+            [selection.previous_text],
             [current],
             max_length=self.max_length,
             truncation=True,

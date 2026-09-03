@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -7,8 +6,8 @@ import torch
 from torch import nn
 
 from indextts.emotion.cli import _release_data_check
-from indextts.emotion.dataset import EmotionBatchCollator, format_current_text
-from indextts.emotion.metrics import emotion_metrics
+from indextts.emotion.dataset import format_current_text
+from indextts.emotion.metrics import calibrate_neutral_threshold, emotion_metrics
 from indextts.emotion.model import MacBertEmotionModel, masked_emotion_loss
 from indextts.emotion.schema import EMOTION_NAMES, parse_example, validate_work_splits
 
@@ -160,6 +159,23 @@ def test_neutral_rows_train_only_the_independent_intensity_gate():
     assert parts["emotionLoss"] == 0.0
 
 
+def test_neutral_loss_weight_penalizes_false_active_gate_predictions():
+    class FixedOutput:
+        emotion_logits = torch.zeros((2, 8))
+        intensity_logits = torch.full((2, 1), 2.0)
+
+    labels = torch.zeros((2, 8), dtype=torch.float32)
+    mask = torch.ones((2, 8), dtype=torch.float32)
+    intensity = torch.tensor([[0.0], [1.0]], dtype=torch.float32)
+    _, unweighted = masked_emotion_loss(
+        FixedOutput(), labels, mask, intensity, neutral_loss_weight=1.0
+    )
+    _, weighted = masked_emotion_loss(
+        FixedOutput(), labels, mask, intensity, neutral_loss_weight=3.0
+    )
+    assert weighted["intensityLoss"] > unweighted["intensityLoss"]
+
+
 def test_positive_weights_balance_only_active_unmasked_examples():
     from indextts.emotion.schema import EmotionExample
     from indextts.emotion.train import emotion_positive_weights
@@ -208,6 +224,20 @@ def test_metrics_ignore_masked_dimensions_and_measure_neutral_activation():
     assert metrics["neutralFalseActivationRate"] == 1.0
     assert "melancholic" not in metrics["perEmotion"]
     assert "calm" not in metrics["perEmotion"]
+
+
+def test_neutral_threshold_calibration_uses_balanced_accuracy():
+    report = calibrate_neutral_threshold(
+        np.asarray([0.0, 0.0, 0.67, 0.67]),
+        np.asarray([0.1, 0.2, 0.4, 0.8]),
+        minimum=0.1,
+        maximum=0.5,
+        step=0.1,
+    )
+    assert report["activeExamples"] == 2
+    assert report["baseExamples"] == 2
+    assert report["recommended"]["threshold"] == pytest.approx(0.4)
+    assert report["recommended"]["balancedAccuracy"] == 1.0
 
 
 def test_sentence_type_prefix_is_stable():

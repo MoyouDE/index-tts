@@ -6,12 +6,98 @@ import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 
 from .metrics import emotion_metrics
-from .schema import EmotionExample
+from .schema import EMOTION_NAMES, EmotionExample
+
+
+def _text_sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def benchmark_qwen_annotations(
+    examples: Sequence[EmotionExample],
+    annotation_paths: Sequence[str | Path],
+    *,
+    neutral_adjust_calm: bool = True,
+) -> dict[str, object]:
+    """Evaluate previously generated Qwen vectors on an exact held-out snapshot."""
+
+    if not annotation_paths:
+        raise ValueError("至少需要一个 Qwen 标注文件")
+    annotations: dict[str, Mapping[str, object]] = {}
+    source_hashes: dict[str, str] = {}
+    for raw_path in annotation_paths:
+        path = Path(raw_path)
+        source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError(f"Qwen 标注必须是 JSON 对象: {path}:{line_number}")
+                row_id = str(row.get("id", "")).strip()
+                if not row_id:
+                    raise ValueError(f"Qwen 标注缺少 id: {path}:{line_number}")
+                if row_id in annotations:
+                    raise ValueError(f"Qwen 标注 id 重复: {row_id}")
+                annotations[row_id] = row
+
+    predictions: list[list[float]] = []
+    missing: list[str] = []
+    for example in examples:
+        row = annotations.get(example.example_id)
+        if row is None:
+            missing.append(example.example_id)
+            continue
+        expected_text_hash = row.get("textSha256")
+        if expected_text_hash and expected_text_hash != _text_sha256(example.text):
+            raise ValueError(f"Qwen 标注 textSha256 不匹配: {example.example_id}")
+        expected_previous_hash = row.get("previousTextSha256")
+        if expected_previous_hash and expected_previous_hash != _text_sha256(
+            example.previous_text
+        ):
+            raise ValueError(f"Qwen 标注 previousTextSha256 不匹配: {example.example_id}")
+        emotions = row.get("emotions")
+        if not isinstance(emotions, Mapping) or set(emotions) != set(EMOTION_NAMES):
+            raise ValueError(f"Qwen 标注八维键集合无效: {example.example_id}")
+        vector = [max(0.0, min(1.0, float(emotions[name]))) for name in EMOTION_NAMES]
+        if neutral_adjust_calm:
+            # The bundled IndexTTS Qwen model names its neutral/default basis
+            # "natural".  Dataset calm is reserved for active composure, so
+            # direct classifier comparison must remove that runtime-only basis.
+            vector[EMOTION_NAMES.index("calm")] = 0.0
+        predictions.append(vector)
+    if missing:
+        preview = ", ".join(missing[:5])
+        raise ValueError(f"Qwen 标注未覆盖测试集 {len(missing)} 条，示例: {preview}")
+
+    labels = np.asarray([example.labels for example in examples], dtype=np.float32)
+    mask = np.asarray([example.label_mask for example in examples], dtype=np.float32)
+    intensities = np.asarray([example.intensity for example in examples], dtype=np.float32)
+    prediction_array = np.asarray(predictions, dtype=np.float32)
+    predicted_intensities = prediction_array.max(axis=1)
+    metrics = emotion_metrics(
+        prediction_array,
+        labels,
+        mask,
+        intensities,
+        predicted_intensities,
+    )
+    metrics.update(
+        {
+            "backend": "qwen0.6bemo4-merge-precomputed",
+            "semanticPolicy": "natural-as-base" if neutral_adjust_calm else "raw-calm",
+            "annotationSources": source_hashes,
+            "warningCount": 0,
+            "latencyAvailable": False,
+        }
+    )
+    return metrics
 
 
 def benchmark_qwen(

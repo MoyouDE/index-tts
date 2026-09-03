@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
-DEFAULT_BASE_MODEL = "hfl/chinese-macbert-base"
-
 from .schema import EmotionExample, load_jsonl_examples, validate_work_splits
+
+
+DEFAULT_BASE_MODEL = "hfl/chinese-macbert-base"
 
 
 def _json(value: object) -> None:
@@ -70,6 +72,22 @@ def command_prepare(args) -> int:
     from .brighter import export_brighter
 
     _json(export_brighter(args.output))
+    return 0
+
+
+def command_resplit_by_work(args) -> int:
+    from .resplit import resplit_by_work
+
+    _json(
+        resplit_by_work(
+            args.input,
+            args.output,
+            dev_works=args.dev_work,
+            test_works=args.test_work,
+            minimum_dev_positive=args.minimum_dev_positive,
+            minimum_test_positive=args.minimum_test_positive,
+        )
+    )
     return 0
 
 
@@ -262,6 +280,10 @@ def command_preflight_training(args) -> int:
             max_length=args.max_length,
             verify_base_weights=args.verify_base_weights,
             minimum_positive=args.minimum_positive,
+            require_cuda=args.require_cuda,
+            minimum_free_vram_bytes=round(args.minimum_free_vram_gib * 1024**3),
+            minimum_free_disk_bytes=round(args.minimum_free_disk_gib * 1024**3),
+            require_complete_context=args.require_complete_context,
         )
     )
     return 0
@@ -278,6 +300,145 @@ def command_annotate_test_qwen(args) -> int:
             batch_size=args.batch_size,
             max_new_tokens=args.max_new_tokens,
             prompt_variant=args.prompt_variant,
+        )
+    )
+    return 0
+
+
+def command_annotate_qwen_continuous_v3(args) -> int:
+    from .qwen_continuous import annotate_qwen_continuous
+
+    _json(
+        annotate_qwen_continuous(
+            args.candidates,
+            args.output,
+            args.model_dir,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+            max_retries=args.max_attempts,
+        )
+    )
+    return 0
+
+
+def command_materialize_qwen_continuous_v3_valid(args) -> int:
+    from .qwen_continuous import materialize_completed_qwen_continuous
+
+    _json(materialize_completed_qwen_continuous(args.candidates, args.output))
+    return 0
+
+
+def command_prepare_continuous_v3(args) -> int:
+    from .continuous_v3 import prepare_continuous_v3
+
+    _json(
+        prepare_continuous_v3(
+            args.novel,
+            args.brighter,
+            args.adjudication_audit,
+            args.output,
+        )
+    )
+    return 0
+
+
+def command_expand_continuous_v3_context(args) -> int:
+    from .continuous_v3_context import expand_continuous_v3_context
+
+    _json(
+        expand_continuous_v3_context(
+            args.input,
+            args.source_root,
+            args.output,
+            base_model=args.base_model,
+            max_length=args.max_length,
+        )
+    )
+    return 0
+
+
+def command_prepare_continuous_v3_reviews(args) -> int:
+    from .continuous_v3 import prepare_continuous_v3_reviews
+
+    report = prepare_continuous_v3_reviews(
+        args.candidates,
+        args.qwen_annotations,
+        args.output,
+        chunk_size=args.chunk_size,
+    )
+    compact = {key: value for key, value in report.items() if key != "chunks"}
+    compact["chunkCount"] = len(report["chunks"])
+    _json(compact)
+    return 0
+
+
+def command_prepare_continuous_v3_comparison_batches(args) -> int:
+    from .continuous_v3 import prepare_continuous_v3_comparison_batches
+
+    report = prepare_continuous_v3_comparison_batches(
+        args.queue,
+        args.output,
+        batch_size=args.batch_size,
+    )
+    compact = {key: value for key, value in report.items() if key != "batches"}
+    _json(compact)
+    return 0
+
+
+def command_validate_continuous_v3_reviews(args) -> int:
+    from .continuous_v3 import validate_continuous_v3_reviews
+
+    report = validate_continuous_v3_reviews(
+        args.queue,
+        args.reviews,
+        args.pass_name,
+    )
+    _json({key: value for key, value in report.items() if key != "reviews"})
+    return 0
+
+
+def command_assemble_continuous_v3_review_chunks(args) -> int:
+    from .continuous_v3 import assemble_continuous_v3_review_chunks
+
+    _json(
+        assemble_continuous_v3_review_chunks(
+            args.queue,
+            args.reviews_dir,
+            args.output,
+            pass_name=args.pass_name,
+            chunk_size=args.chunk_size,
+        )
+    )
+    return 0
+
+
+def command_finalize_continuous_v3(args) -> int:
+    from .continuous_v3 import finalize_continuous_v3
+
+    expected_values = (
+        args.expected_train_count,
+        args.expected_dev_count,
+        args.expected_test_count,
+    )
+    if any(value is not None for value in expected_values) and not all(
+        value is not None for value in expected_values
+    ):
+        raise ValueError("自定义最终计数必须同时提供 train/dev/test")
+    expected_counts = None
+    if all(value is not None for value in expected_values):
+        expected_counts = {
+            "train": args.expected_train_count,
+            "dev": args.expected_dev_count,
+            "test": args.expected_test_count,
+        }
+    _json(
+        finalize_continuous_v3(
+            args.candidates,
+            args.qwen_annotations,
+            args.reviews,
+            args.output,
+            expected_split_counts=expected_counts,
+            exclusions_path=args.exclusions,
         )
     )
     return 0
@@ -300,8 +461,9 @@ def command_validate(args) -> int:
 
 
 def command_train(args) -> int:
+    from .annotation import file_sha256
     from .brighter import load_brighter_split
-    from .train import train_supervised
+    from .train import TrainingInterrupted, train_supervised
 
     train_examples = _load_many(args.train)
     dev_examples = _load_many(args.dev)
@@ -311,20 +473,42 @@ def command_train(args) -> int:
     release_data = _release_data_check(train_examples)
     if args.release and not release_data["releaseEligible"]:
         raise ValueError(f"正式训练数据未达到发布门槛: {release_data}")
-    report = train_supervised(
-        train_examples,
-        dev_examples,
-        args.output,
-        base_model=args.base_model,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        gradient_accumulation=args.gradient_accumulation,
-        learning_rate=args.learning_rate,
-        head_learning_rate=args.head_learning_rate,
-        max_length=args.max_length,
-        seed=args.seed,
-        device_name=args.device,
-    )
+    input_manifest = {
+        split: [
+            {
+                "path": Path(path).resolve().as_posix(),
+                "sha256": file_sha256(path),
+                "sizeBytes": Path(path).stat().st_size,
+            }
+            for path in paths
+        ]
+        for split, paths in (("train", args.train), ("dev", args.dev))
+    }
+    try:
+        report = train_supervised(
+            train_examples,
+            dev_examples,
+            args.output,
+            base_model=args.base_model,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            gradient_accumulation=args.gradient_accumulation,
+            learning_rate=args.learning_rate,
+            head_learning_rate=args.head_learning_rate,
+            intensity_loss_weight=args.intensity_loss_weight,
+            neutral_loss_weight=args.neutral_loss_weight,
+            max_length=args.max_length,
+            seed=args.seed,
+            device_name=args.device,
+            resume=args.resume,
+            checkpoint_steps=args.checkpoint_steps,
+            keep_checkpoints=args.keep_checkpoints,
+            progress=args.progress,
+            input_manifest=input_manifest,
+        )
+    except TrainingInterrupted as exc:
+        print(f"INTERRUPTED: {exc}", file=sys.stderr, flush=True)
+        return 130
     report["releaseData"] = release_data
     report["releaseTraining"] = bool(args.release)
     report_path = Path(args.output) / "training-report.json"
@@ -356,6 +540,10 @@ def command_evaluate(args) -> int:
         device=device,
         batch_size=args.batch_size,
         max_length=args.max_length,
+        progress=args.progress,
+        description="测试集评估",
+        emotion_threshold=args.emotion_threshold,
+        neutral_threshold=args.neutral_threshold,
     )
     if args.output:
         Path(args.output).write_text(
@@ -363,6 +551,48 @@ def command_evaluate(args) -> int:
             encoding="utf-8",
         )
     _json(metrics)
+    return 0
+
+
+def command_calibrate_threshold(args) -> int:
+    import torch
+
+    from .metrics import calibrate_neutral_threshold
+    from .model import load_checkpoint
+    from .train import collect_model_predictions
+
+    examples = _load_many(args.data)
+    model, tokenizer = load_checkpoint(args.checkpoint)
+    device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    model.to(device)
+    predictions = collect_model_predictions(
+        model,
+        examples,
+        tokenizer,
+        device=device,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+        progress=args.progress,
+        description="验证集阈值校准",
+    )
+    report = calibrate_neutral_threshold(
+        predictions["intensities"],
+        predictions["predictedIntensities"],
+        minimum=args.minimum,
+        maximum=args.maximum,
+        step=args.step,
+        minimum_active_recall=args.minimum_active_recall,
+    )
+    Path(args.output).write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    if args.threshold_output:
+        Path(args.threshold_output).write_text(
+            f"{float(report['recommended']['threshold']):g}\n",
+            encoding="ascii",
+        )
+    _json(report)
     return 0
 
 
@@ -415,6 +645,23 @@ def command_benchmark_qwen(args) -> int:
 
     examples = _load_many(args.data)
     report = benchmark_qwen(examples, args.model_dir)
+    Path(args.output).write_text(
+        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    _json(report)
+    return 0
+
+
+def command_benchmark_qwen_annotations(args) -> int:
+    from .release import benchmark_qwen_annotations
+
+    examples = _load_many(args.data)
+    report = benchmark_qwen_annotations(
+        examples,
+        args.annotations,
+        neutral_adjust_calm=not args.keep_natural_as_calm,
+    )
     Path(args.output).write_text(
         json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -559,6 +806,18 @@ def build_parser() -> argparse.ArgumentParser:
     integrate_coverage.add_argument("--license-id", default="PROPRIETARY-AUTHORIZED")
     integrate_coverage.set_defaults(func=command_integrate_coverage_data)
 
+    resplit = sub.add_parser(
+        "resplit-by-work",
+        help="将既有小说数据按作品无泄漏地重新切分并记录覆盖与哈希",
+    )
+    resplit.add_argument("--input", action="append", required=True)
+    resplit.add_argument("--output", required=True)
+    resplit.add_argument("--dev-work", action="append", required=True)
+    resplit.add_argument("--test-work", action="append", required=True)
+    resplit.add_argument("--minimum-dev-positive", type=int, default=1)
+    resplit.add_argument("--minimum-test-positive", type=int, default=1)
+    resplit.set_defaults(func=command_resplit_by_work)
+
     preflight_training = sub.add_parser(
         "preflight-training",
         help="只读校验训练输入、MacBERT 本地缓存、长度分布和作品泄漏",
@@ -571,6 +830,14 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_training.add_argument("--max-length", type=int, default=256)
     preflight_training.add_argument("--verify-base-weights", action="store_true")
     preflight_training.add_argument("--minimum-positive", type=int, default=1_000)
+    preflight_training.add_argument("--require-cuda", action="store_true")
+    preflight_training.add_argument("--minimum-free-vram-gib", type=float, default=0.0)
+    preflight_training.add_argument("--minimum-free-disk-gib", type=float, default=0.0)
+    preflight_training.add_argument(
+        "--require-complete-context",
+        action="store_true",
+        help="要求 previousText 遵循最多三句完整上文且不发生上文截断",
+    )
     preflight_training.set_defaults(func=command_preflight_training)
 
     qwen_test = sub.add_parser(
@@ -584,6 +851,112 @@ def build_parser() -> argparse.ArgumentParser:
     qwen_test.add_argument("--max-new-tokens", type=int, default=128)
     qwen_test.add_argument("--prompt-variant", choices=["a", "b"], default="a")
     qwen_test.set_defaults(func=command_annotate_test_qwen)
+
+    qwen_continuous_v3 = sub.add_parser(
+        "annotate-qwen-continuous-v3",
+        help="使用目标句-only Qwen 严格生成 v3 连续八维原始伪标签",
+    )
+    qwen_continuous_v3.add_argument("--candidates", required=True)
+    qwen_continuous_v3.add_argument("--output", required=True)
+    qwen_continuous_v3.add_argument("--model-dir", required=True)
+    qwen_continuous_v3.add_argument("--batch-size", type=int, default=8)
+    qwen_continuous_v3.add_argument("--max-new-tokens", type=int, default=128)
+    qwen_continuous_v3.add_argument("--max-attempts", type=int, default=3)
+    qwen_continuous_v3.set_defaults(func=command_annotate_qwen_continuous_v3)
+
+    materialize_qwen_continuous_v3_valid = sub.add_parser(
+        "materialize-qwen-continuous-v3-valid",
+        help="在明确接受失败项排除后物化严格成功的 Qwen v3 子集",
+    )
+    materialize_qwen_continuous_v3_valid.add_argument("--candidates", required=True)
+    materialize_qwen_continuous_v3_valid.add_argument("--output", required=True)
+    materialize_qwen_continuous_v3_valid.set_defaults(
+        func=command_materialize_qwen_continuous_v3_valid
+    )
+
+    prepare_continuous_v3 = sub.add_parser(
+        "prepare-continuous-v3",
+        help="合并小说与 BRIGHTER 固定样本并生成 v3 连续标注候选",
+    )
+    prepare_continuous_v3.add_argument("--novel", action="append", required=True)
+    prepare_continuous_v3.add_argument("--brighter", action="append", required=True)
+    prepare_continuous_v3.add_argument("--adjudication-audit", required=True)
+    prepare_continuous_v3.add_argument("--output", required=True)
+    prepare_continuous_v3.set_defaults(func=command_prepare_continuous_v3)
+
+    expand_continuous_v3_context = sub.add_parser(
+        "expand-continuous-v3-context",
+        help="从 r2 小说记录生成最多三个完整前句的独立训练快照",
+    )
+    expand_continuous_v3_context.add_argument("--input", required=True)
+    expand_continuous_v3_context.add_argument("--source-root", required=True)
+    expand_continuous_v3_context.add_argument("--output", required=True)
+    expand_continuous_v3_context.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
+    expand_continuous_v3_context.add_argument("--max-length", type=int, default=256)
+    expand_continuous_v3_context.set_defaults(func=command_expand_continuous_v3_context)
+
+    prepare_continuous_v3_reviews = sub.add_parser(
+        "prepare-continuous-v3-reviews",
+        help="检测 v3 方向冲突并生成单轮 Codex Agent 校正分片",
+    )
+    prepare_continuous_v3_reviews.add_argument("--candidates", required=True)
+    prepare_continuous_v3_reviews.add_argument("--qwen-annotations", required=True)
+    prepare_continuous_v3_reviews.add_argument("--output", required=True)
+    prepare_continuous_v3_reviews.add_argument("--chunk-size", type=int, default=50)
+    prepare_continuous_v3_reviews.set_defaults(
+        func=command_prepare_continuous_v3_reviews
+    )
+
+    comparison_batches = sub.add_parser(
+        "prepare-continuous-v3-comparison-batches",
+        help="按相近方向和强度排序，生成可在批内横向校准的 Agent 复核批次",
+    )
+    comparison_batches.add_argument("--queue", required=True)
+    comparison_batches.add_argument("--output", required=True)
+    comparison_batches.add_argument("--batch-size", type=int, default=100)
+    comparison_batches.set_defaults(
+        func=command_prepare_continuous_v3_comparison_batches
+    )
+
+    validate_continuous_v3_reviews = sub.add_parser(
+        "validate-continuous-v3-reviews",
+        help="严格校验一份 v3 Agent 连续八维复核结果",
+    )
+    validate_continuous_v3_reviews.add_argument("--queue", required=True)
+    validate_continuous_v3_reviews.add_argument("--reviews", required=True)
+    validate_continuous_v3_reviews.add_argument("--pass-name", required=True)
+    validate_continuous_v3_reviews.set_defaults(
+        func=command_validate_continuous_v3_reviews
+    )
+
+    assemble_continuous_v3_reviews = sub.add_parser(
+        "assemble-continuous-v3-reviews",
+        help="严格校验独立 Agent 的全部分片并原子汇总为单一复核文件",
+    )
+    assemble_continuous_v3_reviews.add_argument("--queue", required=True)
+    assemble_continuous_v3_reviews.add_argument("--reviews-dir", required=True)
+    assemble_continuous_v3_reviews.add_argument("--output", required=True)
+    assemble_continuous_v3_reviews.add_argument("--pass-name", required=True)
+    assemble_continuous_v3_reviews.add_argument("--chunk-size", type=int, default=50)
+    assemble_continuous_v3_reviews.set_defaults(
+        func=command_assemble_continuous_v3_review_chunks
+    )
+
+    finalize_continuous_v3 = sub.add_parser(
+        "finalize-continuous-v3",
+        help="从单轮 Agent 校正结果物化并完整审计 v3 train/dev/test 数据",
+    )
+    finalize_continuous_v3.add_argument("--candidates", required=True)
+    finalize_continuous_v3.add_argument("--qwen-annotations", required=True)
+    finalize_continuous_v3.add_argument(
+        "--reviews", required=True, help="单轮 Codex Agent 汇总复核文件"
+    )
+    finalize_continuous_v3.add_argument("--output", required=True)
+    finalize_continuous_v3.add_argument("--exclusions")
+    finalize_continuous_v3.add_argument("--expected-train-count", type=int)
+    finalize_continuous_v3.add_argument("--expected-dev-count", type=int)
+    finalize_continuous_v3.add_argument("--expected-test-count", type=int)
+    finalize_continuous_v3.set_defaults(func=command_finalize_continuous_v3)
 
     validate = sub.add_parser("validate-data", help="校验 schema、许可证白名单和作品级切分")
     validate.add_argument("--train", action="append", default=[])
@@ -615,9 +988,15 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--gradient-accumulation", type=int, default=2)
     train.add_argument("--learning-rate", type=float, default=2e-5)
     train.add_argument("--head-learning-rate", type=float, default=1e-4)
+    train.add_argument("--intensity-loss-weight", type=float, default=0.35)
+    train.add_argument("--neutral-loss-weight", type=float, default=1.0)
     train.add_argument("--max-length", type=int, default=256)
     train.add_argument("--seed", type=int, default=20260829)
     train.add_argument("--device")
+    train.add_argument("--resume", choices=["auto", "never"], default="never")
+    train.add_argument("--checkpoint-steps", type=int, default=0)
+    train.add_argument("--keep-checkpoints", type=int, default=2)
+    train.add_argument("--progress", action="store_true")
     train.set_defaults(func=command_train)
 
     evaluate = sub.add_parser("evaluate", help="评估八维指标和 neutral/base 误触发率")
@@ -628,7 +1007,28 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--batch-size", type=int, default=32)
     evaluate.add_argument("--max-length", type=int, default=256)
     evaluate.add_argument("--device")
+    evaluate.add_argument("--emotion-threshold", type=float, default=0.35)
+    evaluate.add_argument("--neutral-threshold", type=float, default=0.15)
+    evaluate.add_argument("--progress", action="store_true")
     evaluate.set_defaults(func=command_evaluate)
+
+    calibrate = sub.add_parser(
+        "calibrate-threshold",
+        help="仅用验证集校准 neutral/base gate 阈值",
+    )
+    calibrate.add_argument("--checkpoint", required=True)
+    calibrate.add_argument("--data", action="append", required=True)
+    calibrate.add_argument("--output", required=True)
+    calibrate.add_argument("--threshold-output")
+    calibrate.add_argument("--minimum", type=float, default=0.05)
+    calibrate.add_argument("--maximum", type=float, default=0.8)
+    calibrate.add_argument("--step", type=float, default=0.005)
+    calibrate.add_argument("--minimum-active-recall", type=float, default=0.8)
+    calibrate.add_argument("--batch-size", type=int, default=32)
+    calibrate.add_argument("--max-length", type=int, default=256)
+    calibrate.add_argument("--device")
+    calibrate.add_argument("--progress", action="store_true")
+    calibrate.set_defaults(func=command_calibrate_threshold)
 
     export = sub.add_parser("export-onnx", help="导出 FP32 ONNX 与哈希 manifest")
     export.add_argument("--checkpoint", required=True)
@@ -649,6 +1049,20 @@ def build_parser() -> argparse.ArgumentParser:
     qwen.add_argument("--data", action="append", required=True)
     qwen.add_argument("--output", required=True)
     qwen.set_defaults(func=command_benchmark_qwen)
+
+    qwen_annotations = sub.add_parser(
+        "benchmark-qwen-annotations",
+        help="校验并评估既有 Qwen 预标注，避免重新运行数千次生成",
+    )
+    qwen_annotations.add_argument("--annotations", action="append", required=True)
+    qwen_annotations.add_argument("--data", action="append", required=True)
+    qwen_annotations.add_argument("--output", required=True)
+    qwen_annotations.add_argument(
+        "--keep-natural-as-calm",
+        action="store_true",
+        help="不把 IndexTTS Qwen 的 natural/calm 默认输出对齐为 base",
+    )
+    qwen_annotations.set_defaults(func=command_benchmark_qwen_annotations)
 
     release = sub.add_parser("release-check", help="组合数据、指标和 TTS 盲测发布门槛")
     release.add_argument("--training-report", required=True)

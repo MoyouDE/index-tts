@@ -88,6 +88,7 @@ def masked_emotion_loss(
     intensity: torch.Tensor,
     *,
     intensity_weight: float = 0.35,
+    neutral_loss_weight: float = 1.0,
     positive_weights: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     # The eight heads learn composition conditional on active intensity. The
@@ -110,8 +111,18 @@ def masked_emotion_loss(
     active_mask = (intensity > 1e-6).to(label_mask.dtype)
     composition_mask = label_mask * active_mask
     emotion_loss = (emotion_raw * composition_mask).sum() / composition_mask.sum().clamp_min(1.0)
-    intensity_loss = nn.functional.binary_cross_entropy_with_logits(
-        output.intensity_logits, intensity
+    intensity_raw = nn.functional.binary_cross_entropy_with_logits(
+        output.intensity_logits,
+        intensity,
+        reduction="none",
+    )
+    intensity_sample_weights = torch.where(
+        intensity <= 0.05,
+        torch.full_like(intensity, float(neutral_loss_weight)),
+        torch.ones_like(intensity),
+    )
+    intensity_loss = (intensity_raw * intensity_sample_weights).sum() / (
+        intensity_sample_weights.sum().clamp_min(1.0)
     )
     total = emotion_loss + float(intensity_weight) * intensity_loss
     return total, {
