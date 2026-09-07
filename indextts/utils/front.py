@@ -7,6 +7,7 @@ from typing import List, Union, overload
 import warnings
 from indextts.utils.cjk import tokenize_by_CJK_char, de_tokenized_by_CJK_char
 from sentencepiece import SentencePieceProcessor
+from indextts.utils.speech_text import sanitize_speech_text
 
 
 class TextNormalizer:
@@ -171,6 +172,7 @@ class TextNormalizer:
         return text
 
     def normalize(self, text: str) -> str:
+        text = sanitize_speech_text(text)
         if not self.zh_normalizer or not self.en_normalizer:
             print("Error, text normalizer is not initialized !!!")
             return ""

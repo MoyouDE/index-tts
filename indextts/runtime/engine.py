@@ -24,6 +24,7 @@ from indextts.runtime.emotion import EmotionProvider, normalize_emotion
 from indextts.runtime.model_export import verify_runtime_model
 from indextts.runtime.text import apply_pronunciation_annotations, split_text_by_punctuation, split_text_by_tokens
 from indextts.runtime.tokenizer import ReaderTokenizer
+from indextts.utils.speech_text import sanitize_speech_text
 from indextts.s2mel.modules.bigvgan.bigvgan import BigVGAN, load_hparams_from_json
 from indextts.s2mel.modules.commons import MyModel
 from indextts.utils.front import TextNormalizer
@@ -193,6 +194,9 @@ class ReaderRuntime:
         return normalize_emotion(emotion, fallback_to_calm=False), "explicit", warnings
 
     def _prepare_segments(self, text: str) -> list[torch.Tensor]:
+        text = sanitize_speech_text(text)
+        if not text:
+            raise ValueError("文本清理后没有可朗读内容")
         text = self.text_process.clean_pattern.sub(lambda match: self.text_process.char_rep_map[match.group()], text)
         text = self.text_process.normalize(text).lower()
         text = apply_pronunciation_annotations(text)

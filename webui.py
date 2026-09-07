@@ -8,6 +8,7 @@ import threading
 import time
 
 import warnings
+from functools import wraps
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -17,6 +18,7 @@ import pandas as pd
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 sys.path.append(os.path.join(current_dir, "indextts"))
+from indextts.utils.speech_text import sanitize_speech_text
 
 import argparse
 parser = argparse.ArgumentParser(
@@ -99,6 +101,8 @@ IS_V25 = cmd_args.version == "2.5"
 import gradio as gr
 from indextts.utils.examples_downloader import ensure_examples_available
 from indextts.utils.presets import list_presets, save_preset, load_preset, delete_preset
+from indextts.utils.precision import reload_gpt_precision
+from indextts.utils.gpu_memory import cuda_memory_snapshot, release_cuda_cache
 from tools.i18n.i18n import I18nAuto
 
 if IS_V25:
@@ -179,7 +183,53 @@ VOICEPACK_EXPORT_DIR = os.path.abspath(
 )
 os.makedirs(VOICEPACK_EXPORT_DIR, exist_ok=True)
 _voicepack_cache = {}
-mutex = threading.Lock()
+mutex = threading.RLock()
+
+
+def serialize_model_access(fn):
+    @wraps(fn)
+    def locked(*args, **kwargs):
+        with mutex:
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                # Once the callback returns, its temporary tensors are gone.
+                # Do not retain a long request's allocator high-water mark.
+                release_cuda_cache(tts.device)
+                memory = cuda_memory_snapshot(tts.device)
+                if memory:
+                    print(f">> GPU memory after {fn.__name__}: {json.dumps(memory)}")
+    return locked
+
+
+def current_precision():
+    half = tts.use_bf16 if IS_V25 else tts.use_fp16
+    return "16" if half else "32"
+
+
+def precision_controls():
+    value = current_precision()
+    name = ("BF16" if IS_V25 else "FP16") if value == "16" else "FP32"
+    return gr.update(value=value), f"{i18n('当前生效精度')}：**{name}**"
+
+
+@serialize_model_access
+def change_precision(value, progress=gr.Progress()):
+    if value not in ("32", "16"):
+        raise gr.Error(i18n("无效的推理精度"))
+    progress(0, desc=i18n("正在切换精度，请稍候"))
+    try:
+        reload_gpt_precision(
+            tts, value == "16", is_v25=IS_V25,
+            use_deepspeed=cmd_args.deepspeed,
+        )
+    except Exception as exc:
+        print(f"Failed to switch inference precision: {exc}")
+        gr.Warning(f"{i18n('精度切换失败，保留原精度')}：{exc}")
+    progress(1)
+    return precision_controls()
+
+
 # 支持的语言列表
 LANGUAGES = {
     "中文": "zh_CN",
@@ -658,6 +708,7 @@ def prebuild_example_voicepacks():
     _voicepack_cache.clear()
 
 
+@serialize_model_access
 def export_voicepack_from_webui(prompt_audio, voice_id, display_name, gender):
     """Create a reusable conditioning pack without storing the reference WAV."""
     if not IS_V25 or voicepack_builder is None:
@@ -880,6 +931,7 @@ def close_save_preset_modal():
     return gr.update(visible=False)
 
 
+@serialize_model_access
 def gen_single(emo_control_method, prompt, selected_voicepack, text,
                lang_choice,
                emo_ref_path, emo_weight,
@@ -887,7 +939,10 @@ def gen_single(emo_control_method, prompt, selected_voicepack, text,
                emo_text,emo_random,
                max_text_tokens_per_segment=120,
                duration_factor=1.0,
-                *args, progress=gr.Progress()):
+               *args, progress=gr.Progress()):
+    text = sanitize_speech_text(text)
+    if not text:
+        raise gr.Error(i18n("清理符号后没有可朗读的文字，请输入正文。"))
     output_path = None
     if not output_path:
         output_path = os.path.join("outputs", f"spk_{int(time.time())}.wav")
@@ -1025,6 +1080,25 @@ with gr.Blocks(
     with gr.Tab(i18n("音频生成")):
         os.makedirs("prompts", exist_ok=True)
 
+        with gr.Row():
+            precision_mode = gr.Radio(
+                choices=[("FP32", "32"), ("16-bit (BF16)" if IS_V25 else "16-bit (FP16)", "16")],
+                value=current_precision(),
+                label=i18n("推理精度"),
+                info=i18n("切换会重新加载模型，等待当前生成完成后生效；对所有页面生效。"),
+                interactive=str(tts.device).startswith("cuda") and not (cmd_args.accel or cmd_args.deepspeed),
+            )
+            precision_status = gr.Markdown(precision_controls()[1])
+        precision_mode.input(
+            change_precision,
+            inputs=[precision_mode],
+            outputs=[precision_mode, precision_status],
+            concurrency_id="tts_model",
+            concurrency_limit=1,
+            api_name="change_precision",
+        )
+        demo.load(precision_controls, outputs=[precision_mode, precision_status])
+
         if IS_V25:
             _initial_voicepack_choices = voicepack_choices()
             _initial_voicepack = (
@@ -1081,7 +1155,8 @@ with gr.Blocks(
                     label="",
                     key="input_text_single",
                     placeholder=i18n("请输入目标文本"),
-                    info=f"{i18n('当前模型版本')}{tts.model_version or '1.0'}",
+                    info=f"{i18n('当前模型版本')}{tts.model_version or '1.0'} · "
+                         f"{i18n('自动忽略爱心、表情等装饰符号，语气波浪号按停顿处理。')}",
                     lines=5,
                 )
                 if IS_V25:
@@ -1400,9 +1475,11 @@ with gr.Blocks(
     )
 
     def on_input_text_change(text, max_text_tokens_per_segment, lang_choice):
+        text = sanitize_speech_text(text)
         if text and len(text) > 0:
             if IS_V25:
                 lang_prefix = f'<|{(lang_choice or "ZH").lower()}|> '
+                text = tts.prepare_text(text, lang_choice or "ZH")
                 segments = tts.split_text_by_tokens(
                     text,
                     int(max_text_tokens_per_segment),
@@ -1738,7 +1815,9 @@ with gr.Blocks(
                              duration_factor,
                              *advanced_params,
                      ],
-                     outputs=[output_audio])
+                     outputs=[output_audio],
+                     concurrency_id="tts_model",
+                     concurrency_limit=1)
 
 
 

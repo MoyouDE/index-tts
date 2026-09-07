@@ -21,8 +21,10 @@ from indextts.codec.models import EnhancedCodec
 from indextts.gpt.model_v2 import UnifiedVoice
 from indextts.utils.checkpoint import load_checkpoint
 from indextts.utils.common import save_pcm_wav
+from indextts.utils.gpu_memory import staged_model, synchronize_device
 from indextts.utils.front import TextNormalizer
 from indextts.utils.tokenizer import get_tokenizer, lang_to_token
+from indextts.utils.speech_text import sanitize_speech_text
 from indextts.utils.ja_g2p import JapaneseG2PProcessor
 from indextts.utils.nemo_tn import normalize_text as nemo_text_normalize
 
@@ -131,7 +133,7 @@ class IndexTTS2:
                 print(f">> Low-VRAM mode enabled ({total_vram_gb:.1f} GB < 10 GB), long text will be split into chunks")
 
         if use_qwen_emo:
-            self.qwen_emo = QwenEmotion(os.path.join(self.model_dir, self.cfg.qwen_emo_path))
+            self.qwen_emo = QwenEmotion(os.path.join(self.model_dir, self.cfg.qwen_emo_path), device=self.device)
         else:
             self.qwen_emo = None
             print(">> QwenEmotion not loaded (use_qwen_emo=False)")
@@ -172,9 +174,10 @@ class IndexTTS2:
             aux_paths = ensure_models_available(self.model_dir)
             w2v_bert_dir = aux_paths["w2v_bert"]
         self.extract_features = SeamlessM4TFeatureExtractor.from_pretrained(w2v_bert_dir, local_files_only=True)
-        self.semantic_model = Wav2Vec2BertModel.from_pretrained(w2v_bert_dir, local_files_only=True)
-        self.semantic_model = self.semantic_model.to(self.device)
-        self.semantic_model.eval()
+        # Voice packs already contain these features. Load the reference encoder
+        # only when a reference recording actually needs to be encoded.
+        self.w2v_bert_dir = w2v_bert_dir
+        self.semantic_model = None
         stat_mean_var = torch.load(os.path.join(self.model_dir, self.cfg.w2v_stat))
         self.semantic_mean = stat_mean_var["mean"].to(self.device)
         self.semantic_std = torch.sqrt(stat_mean_var["var"]).to(self.device)
@@ -217,7 +220,7 @@ class IndexTTS2:
             campplus_ckpt_path = aux_paths["campplus"]
         campplus_model = CAMPPlus(feat_dim=80, embedding_size=192)
         campplus_model.load_state_dict(torch.load(campplus_ckpt_path, map_location="cpu"))
-        self.campplus_model = campplus_model.to(self.device)
+        self.campplus_model = campplus_model
         self.campplus_model.eval()
         print(">> campplus_model weights restored from:", campplus_ckpt_path)
 
@@ -280,13 +283,18 @@ class IndexTTS2:
 
     @torch.no_grad()
     def get_emb(self, input_features, attention_mask):
-        vq_emb = self.semantic_model(
-            input_features=input_features,
-            attention_mask=attention_mask,
-            output_hidden_states=True,
-        )
-        feat = vq_emb.hidden_states[17]  # (B, T, C)
-        feat = (feat - self.semantic_mean) / self.semantic_std
+        if self.semantic_model is None:
+            self.semantic_model = Wav2Vec2BertModel.from_pretrained(
+                self.w2v_bert_dir, local_files_only=True,
+            ).eval()
+        with staged_model(self.semantic_model, self.device) as model:
+            vq_emb = model(
+                input_features=input_features,
+                attention_mask=attention_mask,
+                output_hidden_states=True,
+            )
+            feat = (vq_emb.hidden_states[17] - self.semantic_mean) / self.semantic_std
+            del vq_emb
         return feat
 
     @torch.no_grad()
@@ -426,7 +434,8 @@ class IndexTTS2:
             audio_16k.to(self.device), num_mel_bins=80, dither=0, sample_frequency=16000
         )
         feat = feat - feat.mean(dim=0, keepdim=True)
-        style = self.campplus_model(feat.unsqueeze(0))
+        with staged_model(self.campplus_model, self.device) as model:
+            style = model(feat.unsqueeze(0))
         prompt_condition = self.s2mel.models['length_regulator'](
             spk_cond_emb,
             ylens=ref_target_lengths,
@@ -563,12 +572,35 @@ class IndexTTS2:
 
         return emo_vector
 
+    def prepare_text(self, text, lang, text_normalization=True):
+        """Shared by synthesis and WebUI preview; clean before tilde mapping."""
+        text = sanitize_speech_text(text)
+        if not text:
+            raise ValueError("Text contains no speakable content after symbol cleanup")
+        text = self.text_process.clean_pattern.sub(lambda x: self.text_process.char_rep_map[x.group()], text)
+        if text_normalization:
+            if lang.lower() in ['zh', 'zhen', 'en']:
+                text = self.text_process.normalize(text)
+            elif lang.lower() in ['ja', 'es']:
+                text = nemo_text_normalize(text, lang.lower())
+        if lang.lower() in ['ja', 'zh', 'zhen', 'en']:
+            text = text.lower()
+        if lang.lower() == 'es':
+            text = text.upper()
+        text = apply_pronunciation_annotations(text)
+        if lang.lower() == 'ja':
+            text = self.ja_text_process.process_ja_text(text)
+        return re.sub(r'<\|([^|]+)\|>', lambda m: f'<|{m.group(1).upper()}|>', text)
+
     # 原始推理模式
     def infer(self, spk_audio_prompt, text, output_path, lang,
               emo_audio_prompt=None, emo_alpha=1.0,
               emo_vector=None, use_emo_text=False, emo_text=None, use_random=False, interval_silence=200,
               verbose=False, max_text_tokens_per_segment=120, stream_return=False, more_segment_before=0,
               duration_factor=1.0, text_normalization=True, voice_conditioning=None, **generation_kwargs):
+        text = sanitize_speech_text(text)
+        if not text:
+            raise ValueError("Text contains no speakable content after symbol cleanup")
         if self.low_vram and not stream_return and len(text) > 40:
             segments = self.split_text_by_punctuation(text, max_chars=40)
             if verbose:
@@ -641,13 +673,21 @@ class IndexTTS2:
               verbose=False, max_text_tokens_per_segment=120, stream_return=False, quick_streaming_tokens=0,
               duration_factor=1.0, text_normalization=True, voice_conditioning=None, **generation_kwargs):
         print(">> starting inference...")
+        text = sanitize_speech_text(text)
+        if not text:
+            raise ValueError("Text contains no speakable content after symbol cleanup")
+        print(f">> Inference device: {self.device}; GPT dtype: {next(self.gpt.parameters()).dtype}; "
+              f"s2mel dtype: {next(self.s2mel.parameters()).dtype}")
         self._set_gr_progress(0, "starting inference...")
         if verbose:
             print(f"origin text:{text}, spk_audio_prompt:{spk_audio_prompt}, "
                   f"emo_audio_prompt:{emo_audio_prompt}, emo_alpha:{emo_alpha}, "
                   f"emo_vector:{emo_vector}, use_emo_text:{use_emo_text}, "
                   f"emo_text:{emo_text}")
+        synchronize_device(self.device)
         start_time = time.perf_counter()
+        if str(self.device).startswith("cuda"):
+            torch.cuda.reset_peak_memory_stats(self.device)
 
         if use_emo_text or emo_vector is not None:
             # we're using a text or emotion vector guidance; so we must remove
@@ -794,24 +834,8 @@ class IndexTTS2:
         self._set_gr_progress(0.1, "text processing...")
         lang_prefix = f'<|{lang.lower()}|> '
 
-        text = self.text_process.clean_pattern.sub(lambda x: self.text_process.char_rep_map[x.group()], text)
-
-        if text_normalization:
-            if lang.lower() in ['zh', 'zhen', 'en']:
-                text = self.text_process.normalize(text)
-            elif lang.lower() in ['ja', 'es']:
-                text = nemo_text_normalize(text, lang.lower())
-            print(f'text after normalization: {text}')
-
-        if lang.lower() in ['ja', 'zh', 'zhen', 'en']:
-            text = text.lower()
-        if lang.lower() == 'es':
-            text = text.upper()
-        text = apply_pronunciation_annotations(text)
-
-        if lang.lower() == 'ja':
-            text = self.ja_text_process.process_ja_text(text)
-        text = re.sub(r'<\|([^|]+)\|>', lambda m: f'<|{m.group(1).upper()}|>', text)
+        text = self.prepare_text(text, lang, text_normalization)
+        print(f'text after normalization: {text}')
         segments = self.split_text_by_tokens(text, max_text_tokens_per_segment, lang_prefix)
         segments_count = len(segments)
         segment_tokens = []
@@ -901,6 +925,7 @@ class IndexTTS2:
                             **generation_kwargs
                         )
 
+                synchronize_device(self.device)
                 gpt_gen_time += time.perf_counter() - m_start_time
                 if not has_warned and (codes[:, -1] != self.stop_mel_token).any():
                     warnings.warn(
@@ -955,11 +980,13 @@ class IndexTTS2:
                                                                    ref_mel, style, None, diffusion_steps,
                                                                    inference_cfg_rate=inference_cfg_rate)
                     vc_target = vc_target[:, :, ref_mel.size(-1):]
+                    synchronize_device(self.device)
                     s2mel_time += time.perf_counter() - m_start_time
 
                     m_start_time = time.perf_counter()
                     wav = self.bigvgan(vc_target.float()).squeeze().unsqueeze(0)
                     print(wav.shape)
+                    synchronize_device(self.device)
                     bigvgan_time += time.perf_counter() - m_start_time
                     wav = wav.squeeze(1)
 
@@ -1019,14 +1046,11 @@ def find_most_similar_cosine(query_vector, matrix):
     return most_similar_index
 
 class QwenEmotion:
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, device=None):
         self.model_dir = model_dir
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_dir,
-            torch_dtype="float16",  # "auto"
-            device_map="auto"
-        )
+        self.device = device or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.tokenizer = None
+        self.model = None
         self.prompt = "文本情感分类"
         self.cn_key_to_en = {
             "高兴": "happy",
@@ -1117,6 +1141,14 @@ class QwenEmotion:
         return emotion_dict
 
     def inference(self, text_input):
+        if self.model is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_dir, local_files_only=True)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_dir,
+                torch_dtype=torch.float16 if str(self.device).startswith("cuda") else torch.float32,
+                device_map="cpu",
+                local_files_only=True,
+            ).eval()
         start = time.time()
         messages = [
             {"role": "system", "content": f"{self.prompt}"},
@@ -1128,15 +1160,15 @@ class QwenEmotion:
             add_generation_prompt=True,
             enable_thinking=False,
         )
-        model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-
-        # conduct text completion
-        generated_ids = self.model.generate(
-            **model_inputs,
-            max_new_tokens=32768,
-            pad_token_id=self.tokenizer.eos_token_id
-        )
-        output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+        with staged_model(self.model, self.device) as model:
+            model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
+            generated_ids = model.generate(
+                **model_inputs,
+                max_new_tokens=32768,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+            output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist()
+            del generated_ids, model_inputs
 
         # parsing thinking content
         try:
