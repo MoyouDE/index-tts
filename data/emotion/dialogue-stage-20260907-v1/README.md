@@ -1,18 +1,7 @@
-# 当前阶段正式对白训练数据
+# 当前阶段对白训练数据
 
-本目录是用户于 2026-09-07 确认发布的阶段训练版本，训练入口使用本目录的 train/dev/test。它不是全量审核完成版。
+全量上下文语义审核已完成。train/dev/test 共 8,116 条记录全部完成审核；remaining-review.jsonl 含 7,864 条逐批人工审核台账，corrections.jsonl 中 252 条已接纳记录继续保留，3 条排除记录不进入分片。
 
-从 `secondary-review-3800-20260905-v1/final-dialogue-only-20260907-v1` 的 8,119 条记录派生：合入已正式接纳的 255 条处理结果，保留其中 252 条，排除 3 条已确认非对白记录。实际修改 226 条的八维 `emotions`。其余 7,864 条未复核记录沿用原标签；所有保留记录的原文、上下文、ID、split 和其他非标签字段不变。敏感原文未另行遮蔽或因内容敏感而删除。
+审核后标签已直接同步写回 train/dev/test。原文、上下文、ID、split 和其他 emotions 字段保持不变；每条台账记录保留原始行哈希、审核前标签、审核后标签、理由和置信度，可用于逐条回退核验。
 
-| split | 条数 | 标签修改 | 排除 |
-| --- | ---: | ---: | ---: |
-| train | 5,392 | 222 | 3 |
-| dev | 1,150 | 0 | 0 |
-| test | 1,574 | 4 | 0 |
-| 合计 | 8,116 | 226 | 3 |
-
-全量语义审核和独立强度比较尚未完成。第 10 批未通过中央全文核验，不纳入本版；第 11、12 批已暂停。发布数据没有启动训练、改变模型或触发 ONNX 导出。
-
-`manifest.json` 保存源及输出哈希、字段保留校验、八维分布、全零比例和修改统计。`corrections.jsonl` 保存全部 255 条已接纳处理的原标签、新标签或排除理由、画像和接纳哈希。基线保留在本地 outputs；失败尝试和待核验产物压缩备份在仓库外，不提交 Git。
-
-训练数据沿用 `readest-emotion-target-context-v1`，八维依次为 happy、angry、sad、afraid、disgusted、melancholic、surprised、calm，各自独立取值 0–1，全零合法。
+训练数据沿用 readest-emotion-target-context-v1，八维依次为 happy、angry、sad、afraid、disgusted、melancholic、surprised、calm，各自独立取值 0–1，全零合法。manifest.json 已更新为全量审核完成状态及最终哈希、修改统计、分布和校验结果。
