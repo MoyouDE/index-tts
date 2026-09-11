@@ -1,0 +1,25 @@
+{
+  "appliedToDatasetSplits": false,
+  "candidateProjectionSha256": "d23a5e00e7727872ed73bcb1f5d2fe98f8ba20e7b684e9c3562a2bc73b83fc16",
+  "derivationCounts": {
+    "normalized-model-output": 13,
+    "strict-model-output": 41871
+  },
+  "inputMode": "target-text-only",
+  "modelFingerprint": "ea0b2f33ff9d2934f60f8712516d48a00d357a8948960e0402f8579c2450683e",
+  "promptFingerprint": "64d68865bcfd9e1ae0a58b3cbaf8d1719c1d2feb5fae90710cd87d1afed8efe9",
+  "referenceCount": 41884,
+  "referenceFile": "E:\\Projects\\Readest\\index-tts\\data\\emotion\\dialogue-stage-20260909-v3\\qwen-initial-reference\\initial-reference.jsonl",
+  "referenceFileSha256": "3f26cacb03d4bac812f87c61526cb23d920533936e0c4ed76ae514f7b86574ac",
+  "reviewStatus": "unreviewed-reference",
+  "schema": "readest-emotion-qwen-initial-reference-v1",
+  "schemaVersion": 1,
+  "sourceFile": "E:\\Projects\\Readest\\index-tts\\data\\emotion\\dialogue-stage-20260909-v3\\expansion-candidates.jsonl",
+  "sourceFileSha256": "98637ede8430b17bbb3906ed6f1d61d3eb22774815ce8cd2da44e22f3fd82f2c",
+  "splitCounts": {
+    "dev": 5935,
+    "test": 8123,
+    "train": 27826
+  },
+  "status": "completed"
+}

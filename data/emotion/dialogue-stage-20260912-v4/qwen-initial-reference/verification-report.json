@@ -1,0 +1,43 @@
+{
+  "allTargetsDialogue": true,
+  "allValuesFiniteAndInRange": true,
+  "allZeroCount": 0,
+  "appliedToDatasetSplits": false,
+  "datasetSplitHashesUnchanged": true,
+  "derivationCounts": {
+    "normalized-model-output": 13,
+    "strict-model-output": 41871
+  },
+  "dimensionMeans": {
+    "afraid": 0.076338,
+    "angry": 0.299488,
+    "calm": 0.199434,
+    "disgusted": 0.042741,
+    "happy": 0.027478,
+    "melancholic": 0.042988,
+    "sad": 0.078753,
+    "surprised": 0.234066
+  },
+  "dominantDirectionCounts": {
+    "afraid": 1776,
+    "angry": 13810,
+    "calm": 8405,
+    "disgusted": 489,
+    "happy": 1068,
+    "melancholic": 1637,
+    "sad": 5118,
+    "surprised": 11238
+  },
+  "referenceCount": 41884,
+  "referenceFileSha256": "3f26cacb03d4bac812f87c61526cb23d920533936e0c4ed76ae514f7b86574ac",
+  "schema": "readest-emotion-qwen-initial-reference-verification-v1",
+  "sourceCandidatesRemainUnlabeled": true,
+  "splitCounts": {
+    "dev": 5935,
+    "test": 8123,
+    "train": 27826
+  },
+  "status": "verified",
+  "targetTextOnlyInputVerified": true,
+  "uniqueIds": 41884
+}

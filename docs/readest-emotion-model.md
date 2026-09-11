@@ -1,12 +1,12 @@
 # Readest 中文自动情感模型
 
-> 当前阶段正式训练数据（2026-09-07）：`data/emotion/dialogue-stage-20260907-v1/`，共 8,116 条对白记录。训练入口已切换到该版本；以下 20,518 条快照与原路径属于历史说明。全量语义复核、独立强度比较尚未完成，详见[阶段数据说明](../data/emotion/dialogue-stage-20260907-v1/README.md)。
+> 当前阶段正式训练数据（2026-09-12）：`data/emotion/dialogue-stage-20260912-v4/`，共 **41,764 条**对白记录（8,116 条全量复核基线 + 33,648 条新增审核）。训练入口 `_train_emotion_inner.bat` 已指向该版本；以下 20,518 条快照与原路径属于历史说明。原计划 50,000 条中剩余 8,236 条候选不再继续标注，候选池、旧版本数据集与一次性工具链已移出 git，归档在 `.codex/artifacts/emotion-data-archive-20260912/`。
 
 该模块使用 `hfl/chinese-macbert-base` 初始化中文编码器，只随机初始化八维情感头和总强度头。正式发布模型保持 FP32，不使用动态 INT8，也不使用 Qwen 输出作为伪标签。
 
 ## 数据约束
 
-训练 loader 同时接受历史 JSONL schema v1、连续 v3，以及正式的 `readest-emotion-target-context-v1`。目标上下文 schema 不再使用 `previousText`，而是保存同一 section 内按原文顺序排列的 `sentences[]` 和 `targetSentenceId`；唯一磁盘标签仍是八维 `emotions`。当前 20,518 条小说训练快照位于 `outputs/emotion-data/training-ready-v3-novel-tgt-context512/`，由 `training-ready-v3-r2` 标签和原文重新分句后严格映射生成，ID、split、作品归属与八维标签逐值不变。
+训练 loader 同时接受历史 JSONL schema v1、连续 v3，以及正式的 `readest-emotion-target-context-v1`。目标上下文 schema 不再使用 `previousText`，而是保存同一 section 内按原文顺序排列的 `sentences[]` 和 `targetSentenceId`；唯一磁盘标签仍是八维 `emotions`。历史 20,518 条小说训练快照位于 `outputs/emotion-data/training-ready-v3-novel-tgt-context512/`，由 `training-ready-v3-r2` 标签和原文重新分句后严格映射生成，ID、split、作品归属与八维标签逐值不变。
 
 模型输入是带原子标记的单序列：目标句渲染为 `[TGT][对白|旁白]目标正文[/TGT]`，上下文句渲染为 `[对白|旁白]正文`，跨段落插入 `[NL]`。512-token 预算按“目标 → 最近前一句 → 同 section 且同段的紧邻后一句 → 继续向前”选择，最终恢复原文顺序。上下文句必须完整；前句放不下时仍尝试同段后句但停止加入更早前文，后句放不下时可继续向前填充。任何上下文都不跨 section，只有目标自身超过上限时才对目标正文确定性右截断。
 
@@ -44,7 +44,7 @@ uv run indextts-emotion resplit-by-work `
 
 ## 训练与导出
 
-Windows 本机训练入口会调用 `_train_emotion_inner.bat`。它已经切换到 `training-ready-v3-novel-tgt-context512` 的纯小说 train/dev/test，不再读取 BRIGHTER；固定 512 token、batch 6、梯度累积 4（有效 batch 24），依次执行完整上下文预检、训练、dev-only neutral 阈值校准和小说 test 评估。脚本不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`，本轮也没有执行该脚本。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
+Windows 本机训练入口会调用 `_train_emotion_inner.bat`。它读取 `data/emotion/dialogue-stage-20260912-v4/` 的对白 train/dev/test（41,764 条），不读取 BRIGHTER；固定 512 token、batch 6、梯度累积 4（有效 batch 24），依次执行完整上下文预检、训练、dev-only neutral 阈值校准和小说 test 评估。脚本不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`，本轮也没有执行该脚本。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
 
 训练终端实时显示 epoch、batch、optimizer step、ETA、三项 loss、学习率和 CUDA 显存。每 200 个 optimizer step 以及每轮结束保存原子 checkpoint，最多保留最近两个；按一次 Ctrl+C 会在安全更新边界保存，重新双击 BAT 会按数据哈希和完整训练配置自动续训。配置或数据不匹配时拒绝恢复，训练完成后再次启动只跳过优化并重新验证最佳模型。固定参数为 8 epochs、强度损失权重 0.7、neutral 样本权重 3.0；输出位于 `outputs/emotion-data/macbert-training-v2/`，并包含 `best/`、`training-report.json`、`threshold-calibration.json`、`neutral-threshold.txt`、`novel-test-metrics.json` 和 `test-metrics.json`。
 
