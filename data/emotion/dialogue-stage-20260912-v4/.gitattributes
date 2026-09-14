@@ -1,4 +1,0 @@
-# 数据文件按字节原样保存，禁止 git 做换行符转换，
-# 否则检出后的文件哈希会与 manifest.json 记录不一致。
-*.jsonl -text
-*.json -text

@@ -1,0 +1,115 @@
+{
+  "count": 41764,
+  "emotionDimensions": [
+    "happy",
+    "angry",
+    "sad",
+    "afraid",
+    "disgusted",
+    "melancholic",
+    "surprised",
+    "calm"
+  ],
+  "humanSemanticReview": false,
+  "licenseStatus": "test-only",
+  "licenseStatusCounts": {
+    "test-only": 41764
+  },
+  "lineage": {
+    "sourceManifestSha256": "83d0bf32bb54c881168cb403fedc1da2ec105dfc8b0fc483eaf1cf9303c8be56",
+    "sourceSplitSha256": {
+      "dev": "fc42892094095ed5087bc8cb48993a4b76aa62fd2d0be5a9928c455d1a651b6c",
+      "test": "7bf6e5c5969f3c237ed9c6a1e00bea816b8a2a8a43a98273d14ba7ed8321db8e",
+      "train": "a9450ac0a7d2433764c15c55d3b6bcb9283319a532419fc6fe59d8eeee8ae944"
+    },
+    "sourceVersion": "dialogue-stage-20260915-v5-final-41764-pre-resource"
+  },
+  "normalization": {
+    "contextChanged": false,
+    "labelsChanged": false,
+    "orderChanged": false,
+    "removedTopLevelFields": [
+      "split",
+      "sourceKind"
+    ]
+  },
+  "recordSchema": "readest-emotion-target-context-v1",
+  "recordSchemaVersion": 1,
+  "releaseEligible": false,
+  "schema": "readest-emotion-training-resource-v1",
+  "sentenceFields": [
+    "sentenceId",
+    "sectionId",
+    "lineIndex",
+    "text",
+    "sentenceType"
+  ],
+  "sourceCounts": {
+    "raw-dialogue-expansion:AKMAYA": 2449,
+    "raw-dialogue-expansion:CSI": 2508,
+    "raw-dialogue-expansion:JY": 2443,
+    "raw-dialogue-expansion:WP2021": 1998,
+    "raw-dialogue-expansion:人生模拟：让女剑仙抱憾终身": 2219,
+    "raw-dialogue-expansion:仙子邀我堕凡尘": 2498,
+    "raw-dialogue-expansion:凡人修仙传": 2228,
+    "raw-dialogue-expansion:大爱仙尊，仙子是病娇": 2260,
+    "raw-dialogue-expansion:攻略系统": 2301,
+    "raw-dialogue-expansion:温酒的异世界": 1287,
+    "raw-dialogue-expansion:至尊仙道": 2576,
+    "raw-dialogue-expansion:蛊真人": 1809,
+    "raw-dialogue-expansion:诡秘之主": 2406,
+    "raw-dialogue-expansion:诡舍": 2289,
+    "raw-dialogue-expansion:道诡异仙": 2377,
+    "speaker-id:AKMAYA_annotated": 545,
+    "speaker-id:CSI_annotated": 613,
+    "speaker-id:JY_annotated": 624,
+    "speaker-id:WP2021_annotated": 514,
+    "speaker-id:人生模拟：让女剑仙抱憾终身_annotated": 499,
+    "speaker-id:仙子邀我堕凡尘_annotated": 541,
+    "speaker-id:凡人修仙传_annotated": 550,
+    "speaker-id:大爱仙尊，仙子是病娇_annotated": 513,
+    "speaker-id:攻略系统_annotated": 527,
+    "speaker-id:温酒的异世界_annotated": 520,
+    "speaker-id:至尊仙道_annotated": 537,
+    "speaker-id:蛊真人_annotated": 548,
+    "speaker-id:诡秘之主_annotated": 535,
+    "speaker-id:诡舍_annotated": 526,
+    "speaker-id:道诡异仙_annotated": 524
+  },
+  "splits": {
+    "dev": {
+      "count": 6234,
+      "sha256": "006e73385d608b7bbe4ee3c69412fe6677eb99691b41d6836ba7167e2efeae98"
+    },
+    "test": {
+      "count": 7903,
+      "sha256": "3b7c121f66230a73f48624570d16d655a09d08738ccd72b8b5b49f7ed4ef0948"
+    },
+    "train": {
+      "count": 27627,
+      "sha256": "998704d9667f9d6921276d303a949b81991b9ab8a254a522f01becea3e9b4b62"
+    }
+  },
+  "status": "training-ready",
+  "topLevelFields": [
+    "schema",
+    "schemaVersion",
+    "id",
+    "workId",
+    "sectionId",
+    "sentences",
+    "targetSentenceId",
+    "emotions",
+    "licenseId",
+    "licenseStatus",
+    "source"
+  ],
+  "validation": {
+    "allTargetsDialogue": true,
+    "officialValidateData": true,
+    "trainingLoaderSchema": true,
+    "uniqueIds": true,
+    "workSplitIsolation": true
+  },
+  "version": "dialogue-stage-20260915-v5-final-41764"
+}
