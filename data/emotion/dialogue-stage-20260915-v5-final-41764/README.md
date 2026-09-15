@@ -1,21 +1,11 @@
-# Readest 对白情感训练数据 v5
+# 最终情感训练资源
 
-这是当前唯一的 Readest 对白情感正式训练资源，共 41,764 条目标上下文记录：
+共 41,763 条：按原 split 及保留记录的原始顺序组织。文件只含正式训练字段；审核、API、初判、日志和排除审计均在仓库外。
 
-- `train.jsonl`：27,627 条
-- `dev.jsonl`：6,234 条
-- `test.jsonl`：7,903 条
-- `manifest.json`：schema、字段清单、条数与 SHA-256
+全量一审及残余 2,082 条风险复核已完成；其中 1 条多说话者混杂目标经用户批准排除。复核后完成 240 条风险分层语义抽检及 54 条定向上下文复查，另修正最终结构核对发现的 2 条旧记录多维异常，并通过官方 validate-data。抽检不是全量人工认证，humanSemanticReview=false。
 
-每行严格使用 `readest-emotion-target-context-v1`，只保留训练加载器需要的上下文、目标句、八维情感、来源和许可字段。八维顺序为 `happy`、`angry`、`sad`、`afraid`、`disgusted`、`melancholic`、`surprised`、`calm`。
+目录名中的 41764 保留以兼容现有资源路径；实际条数以 manifest.json 为准。正文、目标句和保留记录的 split、相对顺序未改，仅更新情感标签并排除上述 1 条。
 
-校验命令：
+许可仍为 test-only，仅供内部测试、训练和评估；releaseEligible=false，不声明可对外发布。
 
-```powershell
-uv run indextts-emotion validate-data `
-  --train data/emotion/dialogue-stage-20260915-v5-final-41764/train.jsonl `
-  --dev data/emotion/dialogue-stage-20260915-v5-final-41764/dev.jsonl `
-  --test data/emotion/dialogue-stage-20260915-v5-final-41764/test.jsonl
-```
-
-全部记录的 `licenseStatus` 为 `test-only`，可用于当前内部训练和评测，但不表示数据或模型可对外发布。`humanSemanticReview=false`；本版本经过机器结构校验和上下文模型标注，不称为全量人工语义认证。
+文件：train.jsonl、dev.jsonl、test.jsonl、manifest.json、README.md、.gitattributes。

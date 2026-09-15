@@ -1,5 +1,5 @@
 {
-  "count": 41764,
+  "count": 41763,
   "emotionDimensions": [
     "happy",
     "angry",
@@ -13,7 +13,7 @@
   "humanSemanticReview": false,
   "licenseStatus": "test-only",
   "licenseStatusCounts": {
-    "test-only": 41764
+    "test-only": 41763
   },
   "lineage": {
     "sourceManifestSha256": "83d0bf32bb54c881168cb403fedc1da2ec105dfc8b0fc483eaf1cf9303c8be56",
@@ -22,16 +22,27 @@
       "test": "7bf6e5c5969f3c237ed9c6a1e00bea816b8a2a8a43a98273d14ba7ed8321db8e",
       "train": "a9450ac0a7d2433764c15c55d3b6bcb9283319a532419fc6fe59d8eeee8ae944"
     },
-    "sourceVersion": "dialogue-stage-20260915-v5-final-41764-pre-resource"
+    "sourceVersion": "dialogue-stage-20260915-v5-final-41764-pre-resource",
+    "targetedLabelRevision": {
+      "parentManifestSha256": "67f44f71708087f53128299abd98c753ae7dafed1031da3dac2fc944cb907b83",
+      "workflow": "remaining-risk-review-finalize-v2",
+      "fingerprintSha256": "f93dc3956f527e627b342df62d9a4cd833b70cfc3ea40338c22558e3d85d2cca",
+      "auditSha256": "1247382cb61e85efdf6b5f76232f6d272f26644ad3301896e847fea895459f23",
+      "exclusionSha256": "4ce99892f4f755b38d59b2a00c332bf4a745fd9606c52427d4974a52f6950ab7",
+      "semanticSampleCertificateSha256": "2e058145196c971ce3dd8ebdd6672d41fb37807df54b0c8add432732d57f405d",
+      "additionalReviewCertificateSha256": "99e40fa1c2bcb93b914c98728b977a5081e8213b52567f4c2b04a0e22d38e487",
+      "legacyStructuralReviewSha256": "d92cc6dcef16ce40dadce10e44b4edeeb4520e84d294de3746d69ac1f2ebd9ef"
+    }
   },
   "normalization": {
     "contextChanged": false,
-    "labelsChanged": false,
+    "labelsChanged": true,
     "orderChanged": false,
     "removedTopLevelFields": [
       "split",
       "sourceKind"
-    ]
+    ],
+    "excludedRecordCount": 1
   },
   "recordSchema": "readest-emotion-target-context-v1",
   "recordSchemaVersion": 1,
@@ -45,49 +56,49 @@
     "sentenceType"
   ],
   "sourceCounts": {
-    "raw-dialogue-expansion:AKMAYA": 2449,
-    "raw-dialogue-expansion:CSI": 2508,
-    "raw-dialogue-expansion:JY": 2443,
-    "raw-dialogue-expansion:WP2021": 1998,
-    "raw-dialogue-expansion:人生模拟：让女剑仙抱憾终身": 2219,
-    "raw-dialogue-expansion:仙子邀我堕凡尘": 2498,
-    "raw-dialogue-expansion:凡人修仙传": 2228,
-    "raw-dialogue-expansion:大爱仙尊，仙子是病娇": 2260,
-    "raw-dialogue-expansion:攻略系统": 2301,
-    "raw-dialogue-expansion:温酒的异世界": 1287,
-    "raw-dialogue-expansion:至尊仙道": 2576,
-    "raw-dialogue-expansion:蛊真人": 1809,
-    "raw-dialogue-expansion:诡秘之主": 2406,
-    "raw-dialogue-expansion:诡舍": 2289,
-    "raw-dialogue-expansion:道诡异仙": 2377,
     "speaker-id:AKMAYA_annotated": 545,
-    "speaker-id:CSI_annotated": 613,
     "speaker-id:JY_annotated": 624,
     "speaker-id:WP2021_annotated": 514,
-    "speaker-id:人生模拟：让女剑仙抱憾终身_annotated": 499,
     "speaker-id:仙子邀我堕凡尘_annotated": 541,
     "speaker-id:凡人修仙传_annotated": 550,
     "speaker-id:大爱仙尊，仙子是病娇_annotated": 513,
-    "speaker-id:攻略系统_annotated": 527,
     "speaker-id:温酒的异世界_annotated": 520,
-    "speaker-id:至尊仙道_annotated": 537,
-    "speaker-id:蛊真人_annotated": 548,
     "speaker-id:诡秘之主_annotated": 535,
     "speaker-id:诡舍_annotated": 526,
-    "speaker-id:道诡异仙_annotated": 524
+    "speaker-id:道诡异仙_annotated": 524,
+    "raw-dialogue-expansion:AKMAYA": 2449,
+    "raw-dialogue-expansion:JY": 2442,
+    "raw-dialogue-expansion:WP2021": 1998,
+    "raw-dialogue-expansion:仙子邀我堕凡尘": 2498,
+    "raw-dialogue-expansion:凡人修仙传": 2228,
+    "raw-dialogue-expansion:温酒的异世界": 1287,
+    "raw-dialogue-expansion:诡秘之主": 2406,
+    "raw-dialogue-expansion:诡舍": 2289,
+    "raw-dialogue-expansion:道诡异仙": 2377,
+    "raw-dialogue-expansion:大爱仙尊，仙子是病娇": 2260,
+    "speaker-id:CSI_annotated": 613,
+    "speaker-id:至尊仙道_annotated": 537,
+    "raw-dialogue-expansion:CSI": 2508,
+    "raw-dialogue-expansion:至尊仙道": 2576,
+    "speaker-id:人生模拟：让女剑仙抱憾终身_annotated": 499,
+    "speaker-id:攻略系统_annotated": 527,
+    "speaker-id:蛊真人_annotated": 548,
+    "raw-dialogue-expansion:人生模拟：让女剑仙抱憾终身": 2219,
+    "raw-dialogue-expansion:攻略系统": 2301,
+    "raw-dialogue-expansion:蛊真人": 1809
   },
   "splits": {
+    "train": {
+      "count": 27626,
+      "sha256": "37305a5de6d52f4f0d0e5d750725c7cb2f1088f1b924eee9d236421202d99f41"
+    },
     "dev": {
       "count": 6234,
-      "sha256": "006e73385d608b7bbe4ee3c69412fe6677eb99691b41d6836ba7167e2efeae98"
+      "sha256": "0667dbe7597da23a78d705b2a64434418b849251ca0aea080f3827fd64e02d59"
     },
     "test": {
       "count": 7903,
-      "sha256": "3b7c121f66230a73f48624570d16d655a09d08738ccd72b8b5b49f7ed4ef0948"
-    },
-    "train": {
-      "count": 27627,
-      "sha256": "998704d9667f9d6921276d303a949b81991b9ab8a254a522f01becea3e9b4b62"
+      "sha256": "378dfaf46e632b159936924b57dfa9e2b60057482e9ac4c7496f1a0d42547aec"
     }
   },
   "status": "training-ready",
@@ -111,5 +122,5 @@
     "uniqueIds": true,
     "workSplitIsolation": true
   },
-  "version": "dialogue-stage-20260915-v5-final-41764"
+  "version": "dialogue-stage-20260915-v5-final-41763-reviewed"
 }
