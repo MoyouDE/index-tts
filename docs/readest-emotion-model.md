@@ -1,6 +1,6 @@
 # Readest 中文自动情感模型
 
-> 当前阶段正式训练数据（2026-09-15）：`data/emotion/dialogue-stage-20260915-v5-final-41764/`，共 **41,764 条**上下文校正对白记录。资源目录只保留训练分片、字段/哈希 manifest 和使用说明；旧 v4、逐条审计与生成中间产物不参与训练。训练入口 `_train_emotion_inner.bat` 已指向该版本。`humanSemanticReview=false`，本版本不称为全量人工语义认证。
+> 当前阶段正式训练数据（2026-09-17）：`data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/`，共 **41,763 条**上下文校正对白记录。正式目录只保留 train/dev/test 三份 JSONL；旧版本、逐条审计与生成中间产物不参与训练。训练入口 `_train_emotion_inner.bat` 已指向该版本。`humanSemanticReview=false`，本版本不称为全量人工语义认证。
 
 该模块使用 `hfl/chinese-macbert-base` 初始化中文编码器，只随机初始化八维情感头和总强度头。正式发布模型保持 FP32，不使用动态 INT8，也不使用 Qwen 输出作为伪标签。
 
@@ -44,7 +44,7 @@ uv run indextts-emotion resplit-by-work `
 
 ## 训练与导出
 
-Windows 本机训练入口会调用 `_train_emotion_inner.bat`。它读取 `data/emotion/dialogue-stage-20260915-v5-final-41764/` 的对白 train/dev/test（41,764 条），不读取 BRIGHTER；固定 512 token、batch 6、梯度累积 4（有效 batch 24），依次执行完整上下文预检、训练、dev-only neutral 阈值校准和小说 test 评估。脚本不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`，本轮也没有执行该脚本。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
+Windows 本机训练入口会调用 `_train_emotion_inner.bat`。它读取 `data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/` 的对白 train/dev/test（41,763 条），不读取 BRIGHTER；固定 512 token、batch 6、梯度累积 4（有效 batch 24），依次执行完整上下文预检、训练、dev-only neutral 阈值校准和小说 test 评估。脚本不会安装依赖、下载模型、启动 TensorBoard 或启用 `--release`，本轮也没有执行该脚本。启动前要求 CUDA 空闲显存不少于 9GiB、输出盘空间不少于 10GiB，条件不足时只报错，不会结束其他进程。
 
 训练终端实时显示 epoch、batch、optimizer step、ETA、三项 loss、学习率和 CUDA 显存。每 200 个 optimizer step 以及每轮结束保存原子 checkpoint，最多保留最近两个；按一次 Ctrl+C 会在安全更新边界保存，重新双击 BAT 会按数据哈希和完整训练配置自动续训。配置或数据不匹配时拒绝恢复，训练完成后再次启动只跳过优化并重新验证最佳模型。固定参数为 8 epochs、强度损失权重 0.7、neutral 样本权重 3.0；输出位于 `outputs/emotion-data/macbert-training-v2/`，并包含 `best/`、`training-report.json`、`threshold-calibration.json`、`neutral-threshold.txt`、`novel-test-metrics.json` 和 `test-metrics.json`。
 

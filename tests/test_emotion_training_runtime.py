@@ -252,8 +252,8 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
 
     inner = (root / "_train_emotion_inner.bat").read_bytes().decode("gbk")
     for expected in (
-        'set "NOVEL_TRAIN=data/emotion/dialogue-stage-20260915-v5-final-41764/train.jsonl"',
-        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260915-v5-final-41764"',
+        'set "NOVEL_TRAIN=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/train.jsonl"',
+        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763"',
         'set "EPOCHS=8"',
         'set "BATCH_SIZE=6"',
         'set "GRADIENT_ACCUMULATION=4"',
