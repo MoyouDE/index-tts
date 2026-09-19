@@ -8,6 +8,7 @@ from torch import nn
 
 from indextts.emotion import train as train_module
 from indextts.emotion.model import MacBertEmotionModel
+from indextts.emotion.imbalance import ImbalanceConfig
 from indextts.emotion.schema import EMOTION_NAMES, EmotionExample
 from indextts.emotion.training_state import (
     TrainingRunLock,
@@ -132,13 +133,14 @@ def test_training_fingerprint_changes_with_route_or_examples():
     assert first != build_training_fingerprint(train, dev, {"epochs": 2}, {"train": "b"})
 
 
-def test_interrupted_resume_matches_uninterrupted_training(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("training_config", [None, ImbalanceConfig(sampling_mode="mixed")])
+def test_interrupted_resume_matches_uninterrupted_training(tmp_path, monkeypatch, capsys, training_config):
     _patch_tiny_training(monkeypatch)
     train = [_example(index, "train") for index in range(6)]
     dev = [_example(index, "dev") for index in range(2)]
 
     continuous = tmp_path / "continuous"
-    continuous_report = _run(continuous, train, dev, resume="never", progress=True)
+    continuous_report = _run(continuous, train, dev, resume="never", progress=True, training_config=training_config)
     progress_output = capsys.readouterr()
     assert "macroF1" in progress_output.out + progress_output.err
     assert "step" in progress_output.out + progress_output.err
@@ -157,9 +159,9 @@ def test_interrupted_resume_matches_uninterrupted_training(tmp_path, monkeypatch
 
     monkeypatch.setattr(train_module, "save_training_checkpoint", stop_after_first_checkpoint)
     with pytest.raises(train_module.TrainingInterrupted):
-        _run(interrupted, train, dev, resume="auto")
+        _run(interrupted, train, dev, resume="auto", training_config=training_config)
     monkeypatch.setattr(train_module, "save_training_checkpoint", original_save)
-    resumed_report = _run(interrupted, train, dev, resume="auto")
+    resumed_report = _run(interrupted, train, dev, resume="auto", training_config=training_config)
 
     assert resumed_report["history"] == continuous_report["history"]
     assert resumed_report["globalStep"] == continuous_report["globalStep"]
@@ -169,7 +171,13 @@ def test_interrupted_resume_matches_uninterrupted_training(tmp_path, monkeypatch
     for name in continuous_weights:
         assert torch.equal(continuous_weights[name], resumed_weights[name]), name
 
-    completed = _run(interrupted, train, dev, resume="auto")
+    final = load_file(continuous / "final/model.safetensors")
+    restored_final = load_file(interrupted / "final/model.safetensors")
+    assert all(torch.equal(final[k], restored_final[k]) for k in final)
+    if training_config is not None:
+        with pytest.raises(ValueError, match="不匹配"):
+            _run(interrupted, train, dev, resume="auto", training_config=None)
+    completed = _run(interrupted, train, dev, resume="auto", training_config=training_config)
     assert completed["alreadyCompleted"] is True
 
 
@@ -253,7 +261,7 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
     inner = (root / "_train_emotion_inner.bat").read_bytes().decode("gbk")
     for expected in (
         'set "NOVEL_TRAIN=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/train.jsonl"',
-        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763"',
+        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763-balanced-v1"',
         'set "EPOCHS=8"',
         'set "BATCH_SIZE=6"',
         'set "GRADIENT_ACCUMULATION=4"',
@@ -269,6 +277,7 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
         "--minimum-active-recall 0.8",
         '--threshold-output "%THRESHOLD_VALUE%"',
         "--neutral-threshold %NEUTRAL_THRESHOLD%",
+        '--checkpoint "%OUTPUT_DIR%/final"',
         "--progress",
     ):
         assert expected in inner

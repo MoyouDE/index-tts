@@ -10,78 +10,66 @@ def _write(path, value):
     return path
 
 
-def test_release_gate_requires_data_quality_and_blind_test(tmp_path):
+def test_release_gate_requires_training_metrics_and_experiment_audit(tmp_path):
     training = _write(
         tmp_path / "training.json",
-        {"releaseTraining": True, "releaseData": {"releaseEligible": True}},
+        {
+            "trainingObjective": {"loss_mode": "balanced-regression"},
+            "finalEpoch": 8,
+            "finalModelSha256": "a" * 64,
+        },
     )
-    model = _write(
-        tmp_path / "model.json",
-        {"macroF1": 0.8, "macroSpearman": 0.7, "sampleCount": 100},
+    dev = _write(
+        tmp_path / "dev.json",
+        {"macroF1": 0.64, "macroSpearman": 0.59, "intensityMae": 0.09, "sampleCount": 100},
     )
-    qwen = _write(
-        tmp_path / "qwen.json",
-        {"macroF1": 0.75, "macroSpearman": 0.65, "sampleCount": 100, "warningCount": 2},
-    )
-    blind = _write(
-        tmp_path / "blind.json",
-        {"candidateWins": 50, "qwenWins": 40, "ties": 10},
+    test = _write(
+        tmp_path / "test.json",
+        {"macroF1": 0.65, "macroSpearman": 0.59, "intensityMae": 0.09, "sampleCount": 120},
     )
     audit = _write(
         tmp_path / "audit.json",
-        {"commercialDataAuditPassed": True, "approvedBy": "data-owner"},
+        {"passed": True, "recommendation": {"candidate": "A-loss"}},
     )
     approval = build_release_approval(
         training_report_path=training,
-        model_metrics_path=model,
-        qwen_metrics_path=qwen,
-        blind_test_path=blind,
-        data_audit_path=audit,
+        dev_metrics_path=dev,
+        test_metrics_path=test,
+        experiment_audit_path=audit,
     )
     assert approval["qualityGatePassed"] is True
-    assert approval["humanBlindTestPassed"] is True
-    assert approval["noQwenPseudoLabels"] is True
-    assert approval["candidateNoWorseRate"] == pytest.approx(0.55)
+    assert approval["selectedCandidate"] == "A-loss"
+    assert set(approval["inputSha256"]) == {
+        "trainingReport", "devMetrics", "testMetrics", "experimentAudit"
+    }
 
 
 def test_release_approval_rejects_handwritten_incomplete_evidence():
-    with pytest.raises(ValueError, match="noQwenPseudoLabels"):
+    with pytest.raises(ValueError, match="证据集合"):
         validate_release_approval(
             {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "qualityGatePassed": True,
-                "humanBlindTestPassed": True,
-                "commercialDataAuditPassed": True,
+                "selectionPolicy": "experiment-comparison-and-user-selection",
+                "selectedCandidate": "A-loss",
+                "inputSha256": {},
             }
         )
 
 
-def test_release_gate_rejects_model_below_qwen(tmp_path):
+def test_release_gate_rejects_failed_experiment_audit(tmp_path):
     training = _write(
         tmp_path / "training.json",
-        {"releaseTraining": True, "releaseData": {"releaseEligible": True}},
+        {"experiment": {"loss_mode": "balanced-regression"}, "finalEpoch": 8, "finalModelSha256": "a" * 64},
     )
-    model = _write(
-        tmp_path / "model.json",
-        {"macroF1": 0.6, "macroSpearman": 0.7, "sampleCount": 100},
-    )
-    qwen = _write(
-        tmp_path / "qwen.json",
-        {"macroF1": 0.7, "macroSpearman": 0.6, "sampleCount": 100, "warningCount": 0},
-    )
-    blind = _write(
-        tmp_path / "blind.json",
-        {"candidateWins": 100, "qwenWins": 0, "ties": 0},
-    )
-    audit = _write(
-        tmp_path / "audit.json",
-        {"commercialDataAuditPassed": True, "approvedBy": "data-owner"},
-    )
-    with pytest.raises(ValueError, match="Qwen 基线"):
+    metrics = {"macroF1": 0.6, "macroSpearman": 0.5, "intensityMae": 0.1, "sampleCount": 100}
+    dev = _write(tmp_path / "dev.json", metrics)
+    test = _write(tmp_path / "test.json", metrics)
+    audit = _write(tmp_path / "audit.json", {"passed": False, "recommendation": {"candidate": "A-loss"}})
+    with pytest.raises(ValueError, match="验收报告未通过"):
         build_release_approval(
             training_report_path=training,
-            model_metrics_path=model,
-            qwen_metrics_path=qwen,
-            blind_test_path=blind,
-            data_audit_path=audit,
+            dev_metrics_path=dev,
+            test_metrics_path=test,
+            experiment_audit_path=audit,
         )

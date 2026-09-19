@@ -441,9 +441,9 @@ def preflight_training(
         name: max(0, minimum_positive - int(training_positive[name]))
         for name in EMOTION_NAMES
     }
-    from .train import emotion_positive_weights
+    from .imbalance import dimension_weights
 
-    positive_weights = emotion_positive_weights(splits["train"])
+    balanced_weights, balanced_weight_report = dimension_weights(splits["train"])
     if any(positive_gaps.values()):
         warnings.append(
             "训练集仍有情感正例覆盖缺口: "
@@ -478,10 +478,11 @@ def preflight_training(
             "minimumPositivePerEmotion": minimum_positive,
             "qualityCoverageReady": not any(positive_gaps.values()),
             "remainingPositiveGaps": positive_gaps,
-            "emotionPositiveWeights": {
+            "dimensionWeights": {
                 name: float(value)
-                for name, value in zip(EMOTION_NAMES, positive_weights.tolist())
+                for name, value in zip(EMOTION_NAMES, balanced_weights.tolist())
             },
+            "dimensionWeightReport": balanced_weight_report,
         },
         "tokenLengths": length_report,
         "completeContext": complete_context,

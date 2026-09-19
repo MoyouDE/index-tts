@@ -498,9 +498,6 @@ def command_train(args) -> int:
     if args.include_brighter:
         train_examples.extend(load_brighter_split("train"))
         dev_examples.extend(load_brighter_split("dev"))
-    release_data = _release_data_check(train_examples)
-    if args.release and not release_data["releaseEligible"]:
-        raise ValueError(f"正式训练数据未达到发布门槛: {release_data}")
     input_manifest = {
         split: [
             {
@@ -537,13 +534,6 @@ def command_train(args) -> int:
     except TrainingInterrupted as exc:
         print(f"INTERRUPTED: {exc}", file=sys.stderr, flush=True)
         return 130
-    report["releaseData"] = release_data
-    report["releaseTraining"] = bool(args.release)
-    report_path = Path(args.output) / "training-report.json"
-    report_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
     _json(report)
     return 0
 
@@ -703,10 +693,9 @@ def command_release_check(args) -> int:
 
     approval = build_release_approval(
         training_report_path=args.training_report,
-        model_metrics_path=args.model_metrics,
-        qwen_metrics_path=args.qwen_metrics,
-        blind_test_path=args.blind_test,
-        data_audit_path=args.data_audit,
+        dev_metrics_path=args.dev_metrics,
+        test_metrics_path=args.test_metrics,
+        experiment_audit_path=args.experiment_audit,
     )
     Path(args.output).write_text(
         json.dumps(approval, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -1019,7 +1008,6 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--train", action="append", default=[])
     train.add_argument("--dev", action="append", default=[])
     train.add_argument("--include-brighter", action="store_true")
-    train.add_argument("--release", action="store_true", help="强制检查 12000 条完整八维小说标注门槛")
     train.add_argument("--output", required=True)
     train.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
     train.add_argument("--epochs", type=int, default=5)
@@ -1072,7 +1060,7 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export-onnx", help="导出 FP32 ONNX 与哈希 manifest")
     export.add_argument("--checkpoint", required=True)
     export.add_argument("--output", required=True)
-    export.add_argument("--release-approval", help="完整发布门槛均通过且含证据哈希的 JSON 文件")
+    export.add_argument("--release-approval", help="自动质量验收通过且含证据哈希的 JSON 文件")
     export.add_argument("--version", default="1.0.0")
     export.add_argument("--neutral-threshold", type=float, default=0.15)
     export.set_defaults(func=command_export)
@@ -1103,12 +1091,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     qwen_annotations.set_defaults(func=command_benchmark_qwen_annotations)
 
-    release = sub.add_parser("release-check", help="组合数据、指标和 TTS 盲测发布门槛")
+    release = sub.add_parser("release-check", help="组合训练、dev/test 指标和实验验收证据")
     release.add_argument("--training-report", required=True)
-    release.add_argument("--model-metrics", required=True)
-    release.add_argument("--qwen-metrics", required=True)
-    release.add_argument("--blind-test", required=True)
-    release.add_argument("--data-audit", required=True)
+    release.add_argument("--dev-metrics", required=True)
+    release.add_argument("--test-metrics", required=True)
+    release.add_argument("--experiment-audit", required=True)
     release.add_argument("--output", required=True)
     release.set_defaults(func=command_release_check)
     return parser

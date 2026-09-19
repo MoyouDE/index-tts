@@ -7,7 +7,7 @@ set "PYTHON=%~dp0.venv/Scripts/python.exe"
 set "NOVEL_TRAIN=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/train.jsonl"
 set "NOVEL_DEV=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/dev.jsonl"
 set "NOVEL_TEST=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/test.jsonl"
-set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763"
+set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763-balanced-v1"
 set "PREFLIGHT_REPORT=%OUTPUT_DIR%/preflight.json"
 set "THRESHOLD_CALIBRATION=%OUTPUT_DIR%/threshold-calibration.json"
 set "THRESHOLD_VALUE=%OUTPUT_DIR%/neutral-threshold.txt"
@@ -128,8 +128,8 @@ if not exist "%OUTPUT_DIR%/training-complete.json" (
     set "FINAL_EXIT=2"
     goto :end
 )
-if not exist "%OUTPUT_DIR%/best/model.safetensors" (
-    echo [ERROR] Best checkpoint is missing.
+if not exist "%OUTPUT_DIR%/final/model.safetensors" (
+    echo [ERROR] Final epoch checkpoint is missing.
     set "FINAL_EXIT=2"
     goto :end
 )
@@ -138,7 +138,7 @@ echo.
 echo [3/4] Calibrating the neutral gate on dev data only...
 echo.
 "%PYTHON%" -m indextts.emotion.cli calibrate-threshold ^
-    --checkpoint "%OUTPUT_DIR%/best" ^
+    --checkpoint "%OUTPUT_DIR%/final" ^
     --data "%NOVEL_DEV%" ^
     --output "%THRESHOLD_CALIBRATION%" ^
     --threshold-output "%THRESHOLD_VALUE%" ^
@@ -166,7 +166,7 @@ echo.
 echo [4/4] Evaluating the held-out novel test set...
 echo.
 "%PYTHON%" -m indextts.emotion.cli evaluate ^
-    --checkpoint "%OUTPUT_DIR%/best" ^
+    --checkpoint "%OUTPUT_DIR%/final" ^
     --data "%NOVEL_TEST%" ^
     --output "%TEST_METRICS%" ^
     --batch-size 32 ^
@@ -185,7 +185,7 @@ if not "%EVAL_EXIT%"=="0" (
 echo.
 echo ============================================
 echo   Training and evaluation completed
-echo   Best model:   %OUTPUT_DIR%/best
+echo   Formal model: %OUTPUT_DIR%/final
 echo   Train report: %OUTPUT_DIR%/training-report.json
 echo   Calibration:  %THRESHOLD_CALIBRATION%
 echo   Test metrics: %TEST_METRICS%

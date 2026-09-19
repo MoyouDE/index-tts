@@ -23,7 +23,8 @@ from .schema import EmotionExample
 
 
 CHECKPOINT_SCHEMA = "readest-emotion-checkpoint-v1"
-COMPLETION_SCHEMA = "readest-emotion-training-complete-v1"
+LEGACY_COMPLETION_SCHEMA = "readest-emotion-training-complete-v1"
+COMPLETION_SCHEMA = "readest-emotion-training-complete-v2"
 CHECKPOINT_COMPLETE = "COMPLETE"
 TRAINING_COMPLETE = "training-complete.json"
 
@@ -368,16 +369,32 @@ def read_completed_report(
         completion = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"训练完成标记损坏: {marker}") from exc
-    if completion.get("schema") != COMPLETION_SCHEMA:
+    schema = completion.get("schema")
+    if schema not in {LEGACY_COMPLETION_SCHEMA, COMPLETION_SCHEMA}:
         raise ValueError(f"训练完成标记 schema 无效: {marker}")
     if completion.get("fingerprint") != fingerprint:
         raise ValueError("既有训练结果与当前数据或训练配置不匹配")
     report_path = target / "training-report.json"
-    best_weights = target / "best" / MODEL_WEIGHTS
-    if not report_path.is_file() or not best_weights.is_file():
-        raise ValueError("训练完成标记存在，但报告或最佳模型缺失")
-    if completion.get("bestModelSha256") != file_sha256(best_weights):
-        raise ValueError("训练完成标记对应的最佳模型哈希不匹配")
+    if not report_path.is_file():
+        raise ValueError("训练完成标记存在，但训练报告缺失")
+    if schema == LEGACY_COMPLETION_SCHEMA:
+        best_weights = target / "best" / MODEL_WEIGHTS
+        if not best_weights.is_file():
+            raise ValueError("训练完成标记存在，但最佳模型缺失")
+        if completion.get("bestModelSha256") != file_sha256(best_weights):
+            raise ValueError("训练完成标记对应的最佳模型哈希不匹配")
+    else:
+        final_weights = target / "final" / MODEL_WEIGHTS
+        if not final_weights.is_file():
+            raise ValueError("训练完成标记存在，但最终轮模型缺失")
+        if completion.get("finalModelSha256") != file_sha256(final_weights):
+            raise ValueError("训练完成标记对应的最终轮模型哈希不匹配")
+        best_hash = completion.get("bestModelSha256")
+        best_weights = target / "best" / MODEL_WEIGHTS
+        if best_hash is not None and (
+            not best_weights.is_file() or best_hash != file_sha256(best_weights)
+        ):
+            raise ValueError("训练完成标记对应的最佳模型哈希不匹配")
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise ValueError("training-report.json 格式无效")
@@ -394,12 +411,14 @@ def mark_training_complete(
 ) -> Path:
     target = Path(output_dir)
     marker = target / TRAINING_COMPLETE
+    best_weights = target / "best" / MODEL_WEIGHTS
     value = {
         "schema": COMPLETION_SCHEMA,
         "fingerprint": fingerprint,
         "globalStep": int(global_step),
         "bestSelectionScore": float(best_score),
-        "bestModelSha256": file_sha256(target / "best" / MODEL_WEIGHTS),
+        "bestModelSha256": file_sha256(best_weights) if best_weights.is_file() else None,
+        "finalModelSha256": file_sha256(target / "final" / MODEL_WEIGHTS),
         "completedAt": _utc_now(),
     }
     temporary = marker.with_suffix(".tmp")

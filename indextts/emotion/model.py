@@ -90,7 +90,14 @@ def masked_emotion_loss(
     intensity_weight: float = 0.35,
     neutral_loss_weight: float = 1.0,
     positive_weights: torch.Tensor | None = None,
+    dimension_weights: torch.Tensor | None = None,
+    regression_weight: float = 0.0,
+    regression_beta: float = 0.1,
 ) -> tuple[torch.Tensor, dict[str, float]]:
+    if dimension_weights is not None and positive_weights is not None:
+        raise ValueError("Do not combine positive and whole-dimension weighting")
+    if regression_weight < 0 or regression_beta <= 0:
+        raise ValueError("Invalid regression loss configuration")
     # The eight heads learn composition conditional on active intensity. The
     # exported vector multiplies this distribution by the independent gate so
     # neutral/base examples naturally approach an all-zero explicit vector.
@@ -105,11 +112,14 @@ def masked_emotion_loss(
         reduction="none",
         pos_weight=positive_weights,
     )
-    # Neutral/base rows are learned exclusively by the independent intensity
-    # gate.  Treating their conditional composition as eight negative labels
+    # Neutral/base rows are excluded from conditional composition while the
+    # production vector regression below still covers them. Composition BCE
+    # must not treat these rows as eight negative labels, which
     # overwhelms rare emotions and contradicts the conditional-head design.
     active_mask = (intensity > 1e-6).to(label_mask.dtype)
     composition_mask = label_mask * active_mask
+    if dimension_weights is not None:
+        emotion_raw = emotion_raw * dimension_weights
     emotion_loss = (emotion_raw * composition_mask).sum() / composition_mask.sum().clamp_min(1.0)
     intensity_raw = nn.functional.binary_cross_entropy_with_logits(
         output.intensity_logits,
@@ -125,11 +135,21 @@ def masked_emotion_loss(
         intensity_sample_weights.sum().clamp_min(1.0)
     )
     total = emotion_loss + float(intensity_weight) * intensity_loss
-    return total, {
+    regression_loss = None
+    if regression_weight:
+        regression_raw = nn.functional.smooth_l1_loss(
+            output.emotion_vector, labels, beta=regression_beta, reduction="none"
+        )
+        regression_loss = (regression_raw * label_mask).sum() / label_mask.sum().clamp_min(1.0)
+        total = total + regression_weight * regression_loss
+    parts = {
         "loss": float(total.detach()),
         "emotionLoss": float(emotion_loss.detach()),
         "intensityLoss": float(intensity_loss.detach()),
     }
+    if regression_loss is not None:
+        parts["regressionLoss"] = float(regression_loss.detach())
+    return total, parts
 
 
 def save_checkpoint(model: MacBertEmotionModel, tokenizer, output_dir: str | Path) -> Path:

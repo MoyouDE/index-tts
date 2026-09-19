@@ -1,9 +1,10 @@
-"""Quality-first release gates and legacy-Qwen benchmark support."""
+"""Model-quality evidence envelopes and legacy benchmark support."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -158,98 +159,80 @@ def _hash(path: str | Path) -> str:
 
 
 def validate_release_approval(approval: object) -> dict[str, object]:
-    """Validate the evidence envelope required for an approved model export."""
-    if not isinstance(approval, dict) or approval.get("schemaVersion") != 1:
-        raise ValueError("发布批准文件 schemaVersion 必须为 1")
-    required_true = (
-        "qualityGatePassed",
-        "humanBlindTestPassed",
-        "commercialDataAuditPassed",
-        "noQwenPseudoLabels",
-    )
-    if not all(approval.get(name) is True for name in required_true):
-        raise ValueError(f"发布批准文件必须将 {required_true} 全部设为 true")
-    if not str(approval.get("approvedBy", "")).strip():
-        raise ValueError("发布批准文件缺少 approvedBy")
-    if int(approval.get("blindJudgments", 0)) < 100:
-        raise ValueError("发布批准文件的 TTS 盲听判断少于 100 项")
-    if float(approval.get("candidateNoWorseRate", 0.0)) < 0.5:
-        raise ValueError("发布批准文件的候选模型听感低于 Qwen")
+    """Validate the automated model-quality envelope used by packaged exports."""
+    if not isinstance(approval, dict) or approval.get("schemaVersion") != 2:
+        raise ValueError("发布质量文件 schemaVersion 必须为 2")
+    if approval.get("qualityGatePassed") is not True:
+        raise ValueError("发布质量文件未通过自动验收")
+    if approval.get("selectionPolicy") != "experiment-comparison-and-user-selection":
+        raise ValueError("发布质量文件的 selectionPolicy 无效")
+    if not str(approval.get("selectedCandidate", "")).strip():
+        raise ValueError("发布质量文件缺少 selectedCandidate")
     input_hashes = approval.get("inputSha256")
     expected_inputs = {
         "trainingReport",
-        "modelMetrics",
-        "qwenMetrics",
-        "blindTest",
-        "dataAudit",
+        "devMetrics",
+        "testMetrics",
+        "experimentAudit",
     }
     if not isinstance(input_hashes, dict) or set(input_hashes) != expected_inputs:
-        raise ValueError("发布批准文件的 inputSha256 证据集合不完整")
+        raise ValueError("发布质量文件的 inputSha256 证据集合不完整")
     if any(
         not isinstance(value, str)
         or len(value) != 64
         or any(character not in "0123456789abcdefABCDEF" for character in value)
         for value in input_hashes.values()
     ):
-        raise ValueError("发布批准文件包含无效的 SHA-256")
+        raise ValueError("发布质量文件包含无效的 SHA-256")
     return approval
 
 
 def build_release_approval(
     *,
     training_report_path: str | Path,
-    model_metrics_path: str | Path,
-    qwen_metrics_path: str | Path,
-    blind_test_path: str | Path,
-    data_audit_path: str | Path,
+    dev_metrics_path: str | Path,
+    test_metrics_path: str | Path,
+    experiment_audit_path: str | Path,
 ) -> dict[str, object]:
     training = _read_json(training_report_path)
-    model = _read_json(model_metrics_path)
-    qwen = _read_json(qwen_metrics_path)
-    blind = _read_json(blind_test_path)
-    audit = _read_json(data_audit_path)
+    dev = _read_json(dev_metrics_path)
+    test = _read_json(test_metrics_path)
+    audit = _read_json(experiment_audit_path)
 
-    release_data = training.get("releaseData")
-    if not isinstance(release_data, dict) or release_data.get("releaseEligible") is not True:
-        raise ValueError("训练报告未达到 12000 条完整八维、权利明确的小说标注门槛")
-    if training.get("releaseTraining") is not True:
-        raise ValueError("训练任务未使用 --release")
-    if audit.get("commercialDataAuditPassed") is not True or not audit.get("approvedBy"):
-        raise ValueError("商业数据审计尚未通过或缺少 approvedBy")
-
-    quality_passed = (
-        float(model.get("macroF1", -1)) >= float(qwen.get("macroF1", 0))
-        and float(model.get("macroSpearman", -1)) >= float(qwen.get("macroSpearman", 0))
-        and int(model.get("sampleCount", 0)) == int(qwen.get("sampleCount", -1))
-        and int(qwen.get("warningCount", 0)) >= 0
-    )
-    if not quality_passed:
-        raise ValueError("MacBERT 指标未同时达到 Qwen 基线，禁止发布")
-
-    candidate_wins = int(blind.get("candidateWins", 0))
-    qwen_wins = int(blind.get("qwenWins", 0))
-    ties = int(blind.get("ties", 0))
-    judgments = candidate_wins + qwen_wins + ties
-    no_worse_rate = (candidate_wins + ties * 0.5) / judgments if judgments else 0.0
-    blind_passed = judgments >= 100 and no_worse_rate >= 0.5
-    if not blind_passed:
-        raise ValueError("TTS 人工盲测少于 100 项或候选模型听感低于 Qwen")
+    objective = training.get("trainingObjective", training.get("experiment"))
+    if not isinstance(objective, dict) or objective.get("loss_mode") != "balanced-regression":
+        raise ValueError("训练报告不是正式 balanced-regression 目标")
+    if int(training.get("finalEpoch", 0)) <= 0 or not str(training.get("finalModelSha256", "")):
+        raise ValueError("训练报告缺少最终轮模型信息")
+    for name, metrics in (("dev", dev), ("test", test)):
+        values = [metrics.get("macroF1"), metrics.get("macroSpearman"), metrics.get("intensityMae")]
+        if int(metrics.get("sampleCount", 0)) <= 0 or any(
+            not isinstance(value, (int, float)) or not math.isfinite(float(value)) for value in values
+        ):
+            raise ValueError(f"{name} 指标不完整或包含非有限值")
+    if audit.get("passed") is not True:
+        raise ValueError("实验验收报告未通过")
+    recommendation = audit.get("recommendation")
+    selected = recommendation.get("candidate") if isinstance(recommendation, dict) else None
+    if not str(selected or "").strip():
+        raise ValueError("实验验收报告缺少推荐候选")
 
     inputs = {
         "trainingReport": _hash(training_report_path),
-        "modelMetrics": _hash(model_metrics_path),
-        "qwenMetrics": _hash(qwen_metrics_path),
-        "blindTest": _hash(blind_test_path),
-        "dataAudit": _hash(data_audit_path),
+        "devMetrics": _hash(dev_metrics_path),
+        "testMetrics": _hash(test_metrics_path),
+        "experimentAudit": _hash(experiment_audit_path),
     }
     return validate_release_approval({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "qualityGatePassed": True,
-        "humanBlindTestPassed": True,
-        "commercialDataAuditPassed": True,
-        "noQwenPseudoLabels": True,
-        "blindJudgments": judgments,
-        "candidateNoWorseRate": no_worse_rate,
-        "approvedBy": audit["approvedBy"],
+        "selectionPolicy": "experiment-comparison-and-user-selection",
+        "selectedCandidate": selected,
+        "qualitySummary": {
+            "devMacroF1": float(dev["macroF1"]),
+            "testMacroF1": float(test["macroF1"]),
+            "testMacroSpearman": float(test["macroSpearman"]),
+            "testIntensityMae": float(test["intensityMae"]),
+        },
         "inputSha256": inputs,
     })

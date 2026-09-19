@@ -34,6 +34,7 @@ from .training_state import (
     restore_training_checkpoint,
     save_training_checkpoint,
 )
+from .imbalance import ImbalanceConfig, dimension_weights, sampling_weights, mixed_batches, exposure_report
 
 
 class TrainingInterrupted(RuntimeError):
@@ -217,7 +218,10 @@ def train_supervised(
     keep_checkpoints: int = 2,
     progress: bool = False,
     input_manifest: Mapping[str, object] | None = None,
+    training_config: ImbalanceConfig | None = None,
+    stop_after_steps: int | None = None,
 ) -> dict[str, object]:
+    training_config = training_config or ImbalanceConfig()
     if resume not in {"auto", "never"}:
         raise ValueError("resume 必须是 auto 或 never")
     if epochs <= 0 or batch_size <= 0 or gradient_accumulation <= 0:
@@ -247,6 +251,7 @@ def train_supervised(
         "seed": seed,
         "device": str(device),
     }
+    config["trainingObjective"] = training_config.as_dict()
     fingerprint = build_training_fingerprint(
         train_examples,
         dev_examples,
@@ -257,6 +262,10 @@ def train_supervised(
     with TrainingRunLock(target):
         completed = read_completed_report(target, fingerprint) if resume == "auto" else None
         if completed is not None:
+            from .annotation import file_sha256
+            final_path = target / "final" / "model.safetensors"
+            if not final_path.is_file() or file_sha256(final_path) != completed.get("finalModelSha256"):
+                raise ValueError("Final checkpoint missing or hash mismatch")
             if progress:
                 tqdm.write("训练已经完成且配置指纹一致；跳过重复优化。")
             return completed
@@ -280,7 +289,19 @@ def train_supervised(
         dataset = EmotionDataset(train_examples)
         epoch_batches = epoch_batch_indices(len(dataset), batch_size, seed, 1)
         batches_per_epoch = len(epoch_batches)
-        positive_weights = emotion_positive_weights(train_examples).to(device)
+        balanced_weights, weight_report = dimension_weights(train_examples)
+        sample_weights, bucket_counts = sampling_weights(train_examples)
+        loss_options = {"dimension_weights": balanced_weights.to(device),
+                        "regression_weight": training_config.regression_weight,
+                        "regression_beta": training_config.regression_beta}
+        weight_report["samplingBucketCounts"] = bucket_counts
+        weight_report["samplingWeightSummary"] = {
+            "min": float(sample_weights.min()), "max": float(sample_weights.max()),
+            "mean": float(sample_weights.mean()), "std": float(sample_weights.std(unbiased=False)),
+            "cappedFraction": float((sample_weights == 3).double().mean()),
+        }
+        (target / "config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        (target / "weights.json").write_text(json.dumps(weight_report, indent=2) + "\n", encoding="utf-8")
         encoder_parameters = list(model.encoder.parameters())
         head_parameters = list(model.emotion_head.parameters()) + list(
             model.intensity_head.parameters()
@@ -309,6 +330,8 @@ def train_supervised(
         resume_epoch = 1
         resume_batch = 0
         resume_rolling = {"loss": 0.0, "emotionLoss": 0.0, "intensityLoss": 0.0}
+        if training_config.regression_weight:
+            resume_rolling["regressionLoss"] = 0.0
         resume_batch_count = 0
 
         checkpoint = find_resume_checkpoint(target, fingerprint) if resume == "auto" else None
@@ -372,11 +395,18 @@ def train_supervised(
                 for epoch in range(resume_epoch, epochs + 1):
                     model.train()
                     all_batches = epoch_batch_indices(len(dataset), batch_size, seed, epoch)
+                    if training_config.sampling_mode == "mixed":
+                        all_batches = mixed_batches(sample_weights, batch_size, seed, epoch,
+                                                    training_config.weighted_fraction)
+                    exposures = target / "sampling"
+                    exposures.mkdir(exist_ok=True)
+                    (exposures / f"epoch-{epoch}.json").write_text(
+                        json.dumps(exposure_report(train_examples, all_batches), indent=2) + "\n", encoding="utf-8")
                     start_batch = resume_batch if epoch == resume_epoch else 0
                     rolling = (
                         dict(resume_rolling)
                         if epoch == resume_epoch
-                        else {"loss": 0.0, "emotionLoss": 0.0, "intensityLoss": 0.0}
+                        else {key: 0.0 for key in resume_rolling}
                     )
                     batch_count = resume_batch_count if epoch == resume_epoch else 0
                     remaining = all_batches[start_batch:]
@@ -411,7 +441,7 @@ def train_supervised(
                             batch["intensity"].to(device),
                             intensity_weight=intensity_loss_weight,
                             neutral_loss_weight=neutral_loss_weight,
-                            positive_weights=positive_weights,
+                            **loss_options,
                         )
                         (loss / gradient_accumulation).backward()
                         for key in rolling:
@@ -432,6 +462,9 @@ def train_supervised(
                             safe_rolling = dict(rolling)
                             safe_batch_count = batch_count
                             safe_rng = capture_rng_state()
+                            if stop_after_steps is not None and global_step >= stop_after_steps:
+                                saved = persist_checkpoint()
+                                raise TrainingInterrupted(f"Requested smoke stop: {saved}")
                             if (
                                 checkpoint_steps
                                 and global_step % checkpoint_steps == 0
@@ -513,8 +546,9 @@ def train_supervised(
             saved = persist_checkpoint()
             raise TrainingInterrupted(f"已保存中断 checkpoint: {saved}") from exc
 
+        save_checkpoint(model, tokenizer, target / "final")
         report = {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "baseModel": str(base_model),
             "precision": "fp32",
             "seed": seed,
@@ -525,12 +559,7 @@ def train_supervised(
             "devExamples": len(dev_examples),
             "inputFingerprint": fingerprint,
             "globalStep": global_step,
-            "emotionPositiveWeights": {
-                name: float(value)
-                for name, value in zip(
-                    EMOTION_NAMES, positive_weights.detach().cpu().tolist()
-                )
-            },
+            "emotionPositiveWeights": None,
             "elapsedSeconds": round(time.time() - started, 3),
             "bestSelectionScore": best_score,
             "bestEpoch": max(history, key=lambda item: float(item["selectionScore"]))[
@@ -538,6 +567,11 @@ def train_supervised(
             ],
             "history": history,
         }
+        from .annotation import file_sha256
+        report["trainingObjective"] = training_config.as_dict()
+        report["dimensionWeightReport"] = weight_report
+        report["finalEpoch"] = epochs
+        report["finalModelSha256"] = file_sha256(target / "final" / "model.safetensors")
         (target / "training-report.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

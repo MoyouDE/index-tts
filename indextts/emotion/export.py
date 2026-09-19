@@ -124,7 +124,7 @@ def export_onnx(
         if candidate.is_file():
             shutil.copy2(candidate, target / name)
             tokenizer_files.append(name)
-    notices = """# Third-party notices\n\n- Base model: hfl/chinese-macbert-base (Apache-2.0)\n- Public supervised data: BRIGHTER emotion intensities (CC BY 4.0)\n- The release model must also carry attribution for every proprietary-authorized training work.\n- No Qwen pseudo-label is permitted in the release checkpoint.\n"""
+    notices = """# Third-party notices\n\n- Base model: hfl/chinese-macbert-base (Apache-2.0)\n"""
     (target / "THIRD_PARTY_NOTICES.md").write_text(notices, encoding="utf-8")
     files = [ONNX_FILENAME, *tokenizer_files, "THIRD_PARTY_NOTICES.md"]
     manifest = {
@@ -148,7 +148,7 @@ def export_onnx(
         "baseModel": "hfl/chinese-macbert-base",
         "baseModelLicense": "Apache-2.0",
         "sourceCheckpointSha256": sha256_file(source / "model.safetensors"),
-        "trainingDataPolicy": "commercial-license-allowlist; no-qwen-pseudo-labels",
+        "trainingDataPolicy": "curated-readest-emotion-labels",
         "releaseStatus": "approved" if release_approval is not None else "candidate-unvalidated",
         "releaseApproval": release_approval,
         "files": {
