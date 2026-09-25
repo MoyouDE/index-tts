@@ -1,15 +1,18 @@
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 import torch
 from safetensors.torch import load_file
 from torch import nn
+from transformers import BertTokenizerFast
 
 from indextts.emotion import train as train_module
+from indextts.emotion.dataset import EmotionBatchCollator
 from indextts.emotion.model import MacBertEmotionModel
 from indextts.emotion.imbalance import ImbalanceConfig
-from indextts.emotion.schema import EMOTION_NAMES, EmotionExample
+from indextts.emotion.schema import EMOTION_NAMES, EmotionContextSentence, EmotionExample
 from indextts.emotion.training_state import (
     TrainingRunLock,
     build_training_fingerprint,
@@ -33,6 +36,9 @@ class _TinyEncoder(nn.Module):
         super().__init__()
         self.config = _TinyConfig()
         self.projection = nn.Linear(4, 4)
+
+    def resize_token_embeddings(self, _count):
+        return None
 
     def forward(self, input_ids, attention_mask, token_type_ids, return_dict):
         del attention_mask, token_type_ids, return_dict
@@ -181,6 +187,56 @@ def test_interrupted_resume_matches_uninterrupted_training(tmp_path, monkeypatch
     assert completed["alreadyCompleted"] is True
 
 
+def test_context_cache_preserves_weights_and_resume(tmp_path, monkeypatch, capsys):
+    _patch_tiny_training(monkeypatch)
+    vocab = tmp_path / "vocab.txt"
+    vocab.write_text(
+        "\n".join(["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", *"你好世界目标句。"])
+        + "\n",
+        encoding="utf-8",
+    )
+    tokenizer = BertTokenizerFast(vocab_file=str(vocab))
+    monkeypatch.setattr(train_module.AutoTokenizer, "from_pretrained", lambda *a, **k: tokenizer)
+
+    def contextual(index: int, work: str) -> EmotionExample:
+        sentences = tuple(
+            EmotionContextSentence(
+                sentence_id=str(number), section_id=f"{work}:1", line_index=number,
+                text=f"你好世界{index}。" if number != 2 else f"目标句{index}。",
+                sentence_type="dialogue" if number == 2 else "narration",
+            )
+            for number in range(4)
+        )
+        return replace(
+            _example(index, work), context_sentences=sentences,
+            target_sentence_id="2", section_id=f"{work}:1",
+        )
+
+    train = [contextual(index, "train") for index in range(6)]
+    dev = [contextual(index, "dev") for index in range(2)]
+    original_prepare = EmotionBatchCollator.prepare_contexts
+    monkeypatch.setattr(EmotionBatchCollator, "prepare_contexts", lambda self, rows: None)
+    uncached = _run(tmp_path / "uncached", train, dev, max_length=64)
+    monkeypatch.setattr(EmotionBatchCollator, "prepare_contexts", original_prepare)
+    cached = _run(tmp_path / "cached", train, dev, max_length=64, progress=True)
+    progress_output = capsys.readouterr()
+    assert "准备训练输入" in progress_output.out + progress_output.err
+    assert "准备验证输入" in progress_output.out + progress_output.err
+    assert cached["history"] == uncached["history"]
+    for kind in ("best", "final"):
+        plain_weights = load_file(tmp_path / "uncached" / kind / "model.safetensors")
+        cached_weights = load_file(tmp_path / "cached" / kind / "model.safetensors")
+        assert all(torch.equal(plain_weights[key], cached_weights[key]) for key in plain_weights)
+
+    with pytest.raises(train_module.TrainingInterrupted):
+        _run(tmp_path / "resumed", train, dev, max_length=64, resume="auto", stop_after_steps=1)
+    resumed = _run(tmp_path / "resumed", train, dev, max_length=64, resume="auto")
+    assert resumed["history"] == cached["history"]
+    resumed_weights = load_file(tmp_path / "resumed" / "final" / "model.safetensors")
+    cached_weights = load_file(tmp_path / "cached" / "final" / "model.safetensors")
+    assert all(torch.equal(resumed_weights[key], cached_weights[key]) for key in cached_weights)
+
+
 def test_corrupt_latest_checkpoint_is_ignored_and_foreign_checkpoint_is_rejected(
     tmp_path, monkeypatch
 ):
@@ -250,7 +306,7 @@ def test_resource_preflight_rejects_unstable_training_environment(values, messag
         validate_resource_requirements(**values)
 
 
-def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
+def test_training_bat_is_gbk_crlf_and_uses_versioned_candidate_route():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for filename in ("train-emotion.bat", "_train_emotion_inner.bat"):
         raw = (root / filename).read_bytes()
@@ -260,26 +316,39 @@ def test_training_bat_is_gbk_crlf_and_has_fixed_quality_route():
 
     inner = (root / "_train_emotion_inner.bat").read_bytes().decode("gbk")
     for expected in (
-        'set "NOVEL_TRAIN=data/emotion/dialogue-stage-20260917-deepseek-v3-final-41763/train.jsonl"',
-        'set "OUTPUT_DIR=outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763-balanced-v1"',
-        'set "EPOCHS=8"',
-        'set "BATCH_SIZE=6"',
-        'set "GRADIENT_ACCUMULATION=4"',
-        'set "MAX_LENGTH=512"',
-        'set "LEARNING_RATE=2e-5"',
-        'set "HEAD_LEARNING_RATE=1e-4"',
-        'set "INTENSITY_LOSS_WEIGHT=0.7"',
-        'set "NEUTRAL_LOSS_WEIGHT=3.0"',
-        'set "MIN_FREE_VRAM_GIB=9"',
-        "--resume auto",
-        "--checkpoint-steps %CHECKPOINT_STEPS%",
-        "--require-complete-context",
-        "--minimum-active-recall 0.8",
-        '--threshold-output "%THRESHOLD_VALUE%"',
-        "--neutral-threshold %NEUTRAL_THRESHOLD%",
-        '--checkpoint "%OUTPUT_DIR%/final"',
-        "--progress",
+        'set "PROFILE=tools/emotion-data/one-click-profile.json"',
+        'tools/emotion-data/run_one_click.py --profile "%PROFILE%"',
+        "Publish: never automatic",
     ):
         assert expected in inner
     assert "BRIGHTER" not in inner
     assert "--release" not in inner
+    profile = json.loads((root / "tools/emotion-data/one-click-profile.json").read_text(encoding="utf-8"))
+    assert profile["datasetDir"].endswith("dialogue-stage-20260925-supplement-reviewed-43649")
+    assert profile["method"]["trainingObjective"] == "balanced-regression-v1"
+    assert profile["method"]["samplingMode"] == "uniform"
+    assert profile["resources"]["minimumFreeVramGiB"] == 0
+    assert profile["outputDir"] != profile["formalCheckpoint"]
+
+
+def test_preflight_cli_progress_is_compact_and_opt_in(monkeypatch, capsys):
+    from indextts.emotion import cli, training_preflight
+
+    seen = []
+
+    def fake_preflight(*args, **kwargs):
+        seen.append(kwargs["progress"])
+        return {"splitCounts": {"train": 2, "dev": 1, "test": 1}}
+
+    monkeypatch.setattr(training_preflight, "preflight_training", fake_preflight)
+    base = [
+        "preflight-training", "--train", "train.jsonl", "--dev", "dev.jsonl",
+        "--test", "test.jsonl", "--output", "preflight.json",
+    ]
+    args = cli.build_parser().parse_args(base + ["--progress"])
+    assert cli.command_preflight_training(args) == 0
+    assert "[OK] Preflight passed: train=2 dev=1 test=1" in capsys.readouterr().out
+    args = cli.build_parser().parse_args(base)
+    assert cli.command_preflight_training(args) == 0
+    assert '"splitCounts"' in capsys.readouterr().out
+    assert seen == [True, False]

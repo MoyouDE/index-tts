@@ -11,6 +11,8 @@ import torch
 from .schema import EMOTION_NAMES
 from .training_state import epoch_batch_indices
 
+NARRATION_SAMPLING_FORMULA = "uniform-without-replacement+narration-with-replacement;total=N"
+
 
 @dataclass(frozen=True)
 class ImbalanceConfig:
@@ -19,24 +21,68 @@ class ImbalanceConfig:
     sampling_mode: str = "uniform"
     regression_beta: float = 0.1
     regression_weight: float = 1.0
+    regression_positive_weight: float = 1.0
+    regression_auxiliary_weight: float = 1.0
     weighted_fraction: float = 0.2
+    narration_fraction: float = 0.0
     dimension_formula: str = "clip(sqrt(negative/positive),1,3);mean-normalized"
     sampling_formula: str = "max(clip(sqrt(N/bin_count),1,3));zero=3"
+    regression_formula: str = "uniform-valid-dimensions"
 
     def __post_init__(self):
-        if self.implementation != "balanced-regression-v1" or self.loss_mode != "balanced-regression":
+        implementations = {
+            "balanced-regression-v1": (
+                "balanced-regression",
+                "uniform-valid-dimensions",
+            ),
+            "positive-aware-regression-v2": (
+                "balanced-positive-aware-regression",
+                "positive-multiplier;auxiliary-positive-multiplier;weighted-mean",
+            ),
+        }
+        if self.implementation not in implementations:
             raise ValueError("Unknown training objective implementation or loss")
-        if self.sampling_mode not in {"uniform", "mixed"}:
+        expected_loss, expected_formula = implementations[self.implementation]
+        if self.loss_mode != expected_loss or self.regression_formula != expected_formula:
+            raise ValueError("Training objective fields do not match implementation")
+        if self.sampling_mode not in {"uniform", "mixed", "narration-mix"}:
             raise ValueError("Unknown sampling mode")
-        if not all(math.isfinite(v) for v in (self.regression_beta, self.regression_weight)) or self.regression_beta <= 0 or self.regression_weight < 0:
+        regression_values = (
+            self.regression_beta,
+            self.regression_weight,
+            self.regression_positive_weight,
+            self.regression_auxiliary_weight,
+        )
+        if (
+            not all(math.isfinite(v) for v in regression_values)
+            or self.regression_beta <= 0
+            or self.regression_weight < 0
+            or self.regression_positive_weight <= 0
+            or self.regression_auxiliary_weight <= 0
+        ):
             raise ValueError("Invalid regression parameters")
+        if self.implementation == "balanced-regression-v1" and (
+            self.regression_positive_weight != 1.0
+            or self.regression_auxiliary_weight != 1.0
+        ):
+            raise ValueError("v1 requires uniform regression weights")
         if not 0 <= self.weighted_fraction <= 1:
             raise ValueError("Invalid sampling fraction")
-        if self.dimension_formula != type(self).dimension_formula or self.sampling_formula != type(self).sampling_formula:
+        if not math.isfinite(self.narration_fraction) or not 0 <= self.narration_fraction < 1:
+            raise ValueError("Invalid narration sampling fraction")
+        if self.sampling_mode == "narration-mix":
+            if self.narration_fraction <= 0 or self.sampling_formula != NARRATION_SAMPLING_FORMULA:
+                raise ValueError("Narration sampling configuration does not match implementation")
+        elif self.narration_fraction != 0 or self.sampling_formula != type(self).sampling_formula:
+            raise ValueError("Non-narration sampling requires its versioned defaults")
+        if self.dimension_formula != type(self).dimension_formula:
             raise ValueError("Weight formula must match the versioned implementation")
 
     def as_dict(self):
-        return asdict(self)
+        value = asdict(self)
+        if self.sampling_mode != "narration-mix":
+            value.pop("narration_fraction")
+        return value
 
 
 def strength_bin(value):
@@ -95,9 +141,33 @@ def mixed_batches(weights, batch_size, seed, epoch, fraction=0.2):
     return [indices[i:i+batch_size] for i in range(0, n, batch_size)]
 
 
+def narration_mix_batches(examples, batch_size, seed, epoch, fraction):
+    n = len(examples)
+    if n == 0 or batch_size <= 0 or not math.isfinite(fraction) or not 0 <= fraction < 1:
+        raise ValueError("Invalid narration batch parameters")
+    if fraction == 0:
+        return epoch_batch_indices(n, batch_size, seed, epoch)
+    narration = torch.tensor(
+        [index for index, row in enumerate(examples) if row.sentence_type == "narration"],
+        dtype=torch.long,
+    )
+    if not len(narration):
+        raise ValueError("Narration sampling requires narration examples")
+    if round(n * fraction) == 0:
+        return epoch_batch_indices(n, batch_size, seed, epoch)
+    generator = torch.Generator().manual_seed(seed + epoch - 1)
+    k = round(n * fraction)
+    uniform = torch.randperm(n, generator=generator)[:n-k]
+    extra = narration[torch.randint(len(narration), (k,), generator=generator)]
+    indices = torch.cat((uniform, extra))
+    indices = indices[torch.randperm(n, generator=generator)].tolist()
+    return [indices[index:index + batch_size] for index in range(0, n, batch_size)]
+
+
 def exposure_report(examples, batches):
     indices = [i for batch in batches for i in batch]
     repeats = Counter(indices)
+    sentence_types = Counter(examples[i].sentence_type for i in indices)
     bins = np.zeros((8, 3), dtype=np.int64)
     zeros = 0
     for i in indices:
@@ -108,6 +178,7 @@ def exposure_report(examples, batches):
                 bins[d, strength_bin(v)] += 1
     return {"sampleCount": len(indices), "uniqueSamples": len(repeats),
             "duplicateDraws": len(indices)-len(repeats),
+            "sentenceTypeExposure": dict(sorted(sentence_types.items())),
             "maxMultiplicity": max(repeats.values(), default=0),
             "multiplicityHistogram": dict(sorted(Counter(repeats.values()).items())),
             "zeroExamples": zeros, "dimensionExposure": dict(zip(EMOTION_NAMES, bins.sum(axis=1).tolist())),

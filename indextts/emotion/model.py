@@ -93,10 +93,24 @@ def masked_emotion_loss(
     dimension_weights: torch.Tensor | None = None,
     regression_weight: float = 0.0,
     regression_beta: float = 0.1,
+    regression_positive_weight: float = 1.0,
+    regression_auxiliary_weight: float = 1.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if dimension_weights is not None and positive_weights is not None:
         raise ValueError("Do not combine positive and whole-dimension weighting")
-    if regression_weight < 0 or regression_beta <= 0:
+    regression_parameters = (
+        regression_weight,
+        regression_beta,
+        regression_positive_weight,
+        regression_auxiliary_weight,
+    )
+    if (
+        not all(torch.isfinite(torch.tensor(value)).item() for value in regression_parameters)
+        or regression_weight < 0
+        or regression_beta <= 0
+        or regression_positive_weight <= 0
+        or regression_auxiliary_weight <= 0
+    ):
         raise ValueError("Invalid regression loss configuration")
     # The eight heads learn composition conditional on active intensity. The
     # exported vector multiplies this distribution by the independent gate so
@@ -140,7 +154,22 @@ def masked_emotion_loss(
         regression_raw = nn.functional.smooth_l1_loss(
             output.emotion_vector, labels, beta=regression_beta, reduction="none"
         )
-        regression_loss = (regression_raw * label_mask).sum() / label_mask.sum().clamp_min(1.0)
+        positive = (labels > 0) & (label_mask > 0.5)
+        row_max = labels.masked_fill(label_mask <= 0.5, 0.0).max(dim=1, keepdim=True).values
+        auxiliary = positive & (labels < row_max)
+        regression_element_weights = torch.ones_like(labels)
+        regression_element_weights = torch.where(
+            positive,
+            regression_element_weights * float(regression_positive_weight),
+            regression_element_weights,
+        )
+        regression_element_weights = torch.where(
+            auxiliary,
+            regression_element_weights * float(regression_auxiliary_weight),
+            regression_element_weights,
+        )
+        weighted_mask = label_mask * regression_element_weights
+        regression_loss = (regression_raw * weighted_mask).sum() / weighted_mask.sum().clamp_min(1.0)
         total = total + regression_weight * regression_loss
     parts = {
         "loss": float(total.detach()),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import torch
 from torch.utils.data import Dataset
@@ -32,6 +32,43 @@ class EmotionBatchCollator:
     def __init__(self, tokenizer, *, max_length: int = CONTEXT_MAX_LENGTH):
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self._context_encodings: dict[int, Mapping[str, object]] = {}
+        self._prepared_context_examples: list[EmotionExample] = []
+
+    def _encode_context(self, item: EmotionExample) -> Mapping[str, object]:
+        sentences = [sentence.as_json() for sentence in item.context_sentences]
+        selection = select_target_context(
+            sentences,
+            item.target_sentence_id,
+            lambda text: len(
+                self.tokenizer(
+                    text,
+                    add_special_tokens=True,
+                    truncation=False,
+                    padding=False,
+                )["input_ids"]
+            ),
+            max_length=self.max_length,
+        )
+        encoded = self.tokenizer(
+            selection.rendered_text,
+            add_special_tokens=True,
+            truncation=False,
+            padding=False,
+        )
+        # Padding only needs the feature lists, not the fast tokenizer's
+        # per-token Encoding objects retained by BatchEncoding.
+        return dict(encoded)
+
+    def prepare_contexts(self, examples: Iterable[EmotionExample]) -> None:
+        """Cache exactly the per-record encoding used by the ordinary collator."""
+        for item in examples:
+            if item.context_sentences:
+                key = id(item)
+                if key in self._context_encodings:
+                    continue
+                self._context_encodings[key] = self._encode_context(item)
+                self._prepared_context_examples.append(item)
 
     def __call__(self, examples: Iterable[EmotionExample]) -> dict[str, object]:
         items = list(examples)
@@ -61,27 +98,9 @@ class EmotionBatchCollator:
         encoded_items = []
         for item in items:
             if item.context_sentences:
-                sentences = [sentence.as_json() for sentence in item.context_sentences]
-                selection = select_target_context(
-                    sentences,
-                    item.target_sentence_id,
-                    lambda text: len(
-                        self.tokenizer(
-                            text,
-                            add_special_tokens=True,
-                            truncation=False,
-                            padding=False,
-                        )["input_ids"]
-                    ),
-                    max_length=self.max_length,
-                )
                 encoded_items.append(
-                    self.tokenizer(
-                        selection.rendered_text,
-                        add_special_tokens=True,
-                        truncation=False,
-                        padding=False,
-                    )
+                    self._context_encodings.get(id(item))
+                    or self._encode_context(item)
                 )
             else:
                 encoded_items.append(

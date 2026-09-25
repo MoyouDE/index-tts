@@ -34,7 +34,10 @@ from .training_state import (
     restore_training_checkpoint,
     save_training_checkpoint,
 )
-from .imbalance import ImbalanceConfig, dimension_weights, sampling_weights, mixed_batches, exposure_report
+from .imbalance import (
+    ImbalanceConfig, dimension_weights, sampling_weights, mixed_batches,
+    narration_mix_batches, exposure_report,
+)
 
 
 class TrainingInterrupted(RuntimeError):
@@ -123,6 +126,7 @@ def evaluate_model(
     description: str = "验证",
     emotion_threshold: float = 0.35,
     neutral_threshold: float = 0.15,
+    collator: EmotionBatchCollator | None = None,
 ) -> dict[str, object]:
     predictions = collect_model_predictions(
         model,
@@ -133,6 +137,7 @@ def evaluate_model(
         max_length=max_length,
         progress=progress,
         description=description,
+        collator=collator,
     )
     return emotion_metrics(
         predictions["vectors"],
@@ -156,6 +161,7 @@ def collect_model_predictions(
     max_length: int = CONTEXT_MAX_LENGTH,
     progress: bool = False,
     description: str = "预测",
+    collator: EmotionBatchCollator | None = None,
 ) -> dict[str, np.ndarray]:
     model.eval()
     if any(example.context_sentences for example in examples):
@@ -167,14 +173,17 @@ def collect_model_predictions(
         EmotionDataset(examples),
         batch_size=batch_size,
         shuffle=False,
-        collate_fn=EmotionBatchCollator(tokenizer, max_length=max_length),
+        collate_fn=collator or EmotionBatchCollator(tokenizer, max_length=max_length),
     )
     vectors: list[np.ndarray] = []
     labels: list[np.ndarray] = []
     masks: list[np.ndarray] = []
     intensities: list[np.ndarray] = []
     predicted_intensities: list[np.ndarray] = []
-    batches = tqdm(loader, desc=description, dynamic_ncols=True, leave=True) if progress else loader
+    batches = (
+        tqdm(loader, desc=description, dynamic_ncols=True, mininterval=0.5, leave=True)
+        if progress else loader
+    )
     for batch in batches:
         output = model(
             batch["input_ids"].to(device),
@@ -286,6 +295,24 @@ def train_supervised(
             model.encoder.resize_token_embeddings(len(tokenizer))
         model = model.to(device)
         collator = EmotionBatchCollator(tokenizer, max_length=max_length)
+        dev_collator = EmotionBatchCollator(tokenizer, max_length=max_length)
+        if uses_target_context:
+            for name, prepared_collator, examples in (
+                ("训练", collator, train_examples),
+                ("验证", dev_collator, dev_examples),
+            ):
+                rows = (
+                    tqdm(
+                        examples,
+                        desc=f"准备{name}输入",
+                        unit="条",
+                        dynamic_ncols=True,
+                        mininterval=0.5,
+                        leave=True,
+                    )
+                    if progress else examples
+                )
+                prepared_collator.prepare_contexts(rows)
         dataset = EmotionDataset(train_examples)
         epoch_batches = epoch_batch_indices(len(dataset), batch_size, seed, 1)
         batches_per_epoch = len(epoch_batches)
@@ -293,7 +320,9 @@ def train_supervised(
         sample_weights, bucket_counts = sampling_weights(train_examples)
         loss_options = {"dimension_weights": balanced_weights.to(device),
                         "regression_weight": training_config.regression_weight,
-                        "regression_beta": training_config.regression_beta}
+                        "regression_beta": training_config.regression_beta,
+                        "regression_positive_weight": training_config.regression_positive_weight,
+                        "regression_auxiliary_weight": training_config.regression_auxiliary_weight}
         weight_report["samplingBucketCounts"] = bucket_counts
         weight_report["samplingWeightSummary"] = {
             "min": float(sample_weights.min()), "max": float(sample_weights.max()),
@@ -398,6 +427,11 @@ def train_supervised(
                     if training_config.sampling_mode == "mixed":
                         all_batches = mixed_batches(sample_weights, batch_size, seed, epoch,
                                                     training_config.weighted_fraction)
+                    elif training_config.sampling_mode == "narration-mix":
+                        all_batches = narration_mix_batches(
+                            train_examples, batch_size, seed, epoch,
+                            training_config.narration_fraction,
+                        )
                     exposures = target / "sampling"
                     exposures.mkdir(exist_ok=True)
                     (exposures / f"epoch-{epoch}.json").write_text(
@@ -415,18 +449,25 @@ def train_supervised(
                         batch_sampler=remaining,
                         collate_fn=collator,
                     )
+                    loader_batches = iter(loader)
+                    if start_batch:
+                        # A resumed iterator consumes a DataLoader base seed once more.
+                        # Keep model/dropout RNG at the saved optimizer boundary.
+                        restore_rng_state(safe_rng)
                     batches = (
                         tqdm(
-                            loader,
+                            loader_batches,
                             total=len(all_batches),
                             initial=start_batch,
                             desc=f"训练 {epoch}/{epochs}",
                             dynamic_ncols=True,
+                            mininterval=0.5,
                             leave=True,
                         )
                         if progress
-                        else loader
+                        else loader_batches
                     )
+                    last_progress_update = 0.0
                     for relative_index, batch in enumerate(batches, 1):
                         batch_index = start_batch + relative_index
                         output = model(
@@ -476,7 +517,11 @@ def train_supervised(
                             if interrupt.requested and batch_index < len(all_batches):
                                 saved = persist_checkpoint()
                                 raise TrainingInterrupted(f"已保存中断 checkpoint: {saved}")
-                        if progress:
+                        now = time.monotonic() if progress else 0.0
+                        if progress and (
+                            batch_index == len(all_batches)
+                            or now - last_progress_update >= 0.5
+                        ):
                             postfix = {
                                 "step": global_step,
                                 "loss": f"{parts['loss']:.4f}",
@@ -485,7 +530,8 @@ def train_supervised(
                                 "lr": f"{scheduler.get_last_lr()[0]:.2e}",
                                 **_gpu_progress(device),
                             }
-                            batches.set_postfix(postfix, refresh=True)
+                            batches.set_postfix(postfix, refresh=False)
+                            last_progress_update = now
 
                     metrics = evaluate_model(
                         model,
@@ -496,6 +542,7 @@ def train_supervised(
                         max_length=max_length,
                         progress=progress,
                         description=f"验证 {epoch}/{epochs}",
+                        collator=dev_collator,
                     )
                     score = (
                         float(metrics["macroF1"])

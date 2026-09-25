@@ -14,7 +14,7 @@ from indextts.emotion.context_policy import (
 )
 from indextts.emotion.continuous_v3_context import _expand_record
 from indextts.emotion.dataset import EmotionBatchCollator
-from indextts.emotion.training_preflight import _complete_context_summary
+from indextts.emotion.training_preflight import _complete_context_summary, _token_lengths
 
 
 def _count(previous_text: str) -> int:
@@ -268,12 +268,20 @@ def test_training_preflight_detects_context_truncation_but_allows_target_only_tr
             source="source",
         )
 
+    examples = [example("context", "a\nb", "target"), example("target", "", "x" * 30)]
+    updates = []
+    lengths = _token_lengths(
+        _PreflightTokenizer(), examples, max_length=15, progress_update=updates.append,
+    )
     summary = _complete_context_summary(
         _PreflightTokenizer(),
-        [example("context", "a\nb", "target"), example("target", "", "x" * 30)],
+        examples,
         max_length=15,
+        progress_update=updates.append,
     )
 
+    assert len(lengths) == 2
+    assert updates == [1, 1, 1, 1]
     assert summary["contextTruncationIds"] == ["context"]
     assert summary["targetTruncationIds"] == ["target"]
 

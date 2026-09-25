@@ -7,7 +7,9 @@ import platform
 import shutil
 from collections import Counter
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Iterator, Sequence
+
+from tqdm.auto import tqdm
 
 from .annotation import file_sha256
 from .context_policy import (
@@ -158,56 +160,30 @@ def _context_leakage(splits: dict[str, Sequence[EmotionExample]]) -> dict[str, o
     }
 
 
-def _token_lengths(
-    tokenizer,
-    examples: Sequence[EmotionExample],
-    *,
-    max_length: int,
-    batch_size: int = 512,
-) -> list[int]:
-    lengths: list[int] = []
-    del batch_size
+def _counted_examples(
+    examples: Sequence[EmotionExample], progress_update: Callable[[int], object] | None
+) -> Iterator[EmotionExample]:
     for item in examples:
-        if item.context_sentences:
-            selection = select_target_context(
-                [sentence.as_json() for sentence in item.context_sentences],
-                item.target_sentence_id,
-                lambda text: len(
-                    tokenizer(
-                        text,
-                        add_special_tokens=True,
-                        truncation=False,
-                        padding=False,
-                        verbose=False,
-                    )["input_ids"]
-                ),
-                max_length=max_length,
-            )
-            lengths.append(selection.input_token_count)
-        else:
-            encoded = tokenizer(
-                item.previous_text,
-                format_current_text(item.text, item.sentence_type),
-                add_special_tokens=True,
-                truncation=False,
-                padding=False,
-                verbose=False,
-            )
-            lengths.append(len(encoded["input_ids"]))
-    return lengths
+        yield item
+        if progress_update is not None:
+            progress_update(1)
 
 
-def _complete_context_summary(
+def _inspect_examples(
     tokenizer,
     examples: Sequence[EmotionExample],
     *,
     max_length: int,
-) -> dict[str, object]:
+    include_lengths: bool,
+    include_context: bool,
+    progress_update: Callable[[int], object] | None = None,
+) -> tuple[list[int], dict[str, object]]:
+    lengths: list[int] = []
     context_counts: Counter[int] = Counter()
     context_truncation_ids: list[str] = []
     target_truncation_ids: list[str] = []
     invalid_context_ids: list[str] = []
-    for item in examples:
+    for item in _counted_examples(examples, progress_update):
         if item.context_sentences:
             records = [sentence.as_json() for sentence in item.context_sentences]
             try:
@@ -226,7 +202,13 @@ def _complete_context_summary(
                     max_length=max_length,
                 )
             except ValueError:
+                if include_lengths:
+                    raise
                 invalid_context_ids.append(item.example_id)
+                continue
+            if include_lengths:
+                lengths.append(selection.input_token_count)
+            if not include_context:
                 continue
             if tuple(selection.selected_sentence_ids) != tuple(
                 sentence.sentence_id for sentence in item.context_sentences
@@ -239,6 +221,21 @@ def _complete_context_summary(
                 context_truncation_ids.append(item.example_id)
             continue
 
+        current = format_current_text(item.text, item.sentence_type)
+        pair_length: int | None = None
+        if include_lengths:
+            encoded = tokenizer(
+                item.previous_text,
+                current,
+                add_special_tokens=True,
+                truncation=False,
+                padding=False,
+                verbose=False,
+            )
+            pair_length = len(encoded["input_ids"])
+            lengths.append(pair_length)
+        if not include_context:
+            continue
         raw_sentences = (
             item.previous_text.split(LEGACY_CONTEXT_DELIMITER) if item.previous_text else []
         )
@@ -250,7 +247,6 @@ def _complete_context_summary(
         ):
             invalid_context_ids.append(item.example_id)
         context_counts[len(normalized)] += 1
-        current = format_current_text(item.text, item.sentence_type)
         target_length = len(
             tokenizer(
                 "",
@@ -261,23 +257,24 @@ def _complete_context_summary(
                 verbose=False,
             )["input_ids"]
         )
-        pair_length = len(
-            tokenizer(
-                item.previous_text,
-                current,
-                add_special_tokens=True,
-                truncation=False,
-                padding=False,
-                verbose=False,
-            )["input_ids"]
-        )
+        if pair_length is None:
+            pair_length = len(
+                tokenizer(
+                    item.previous_text,
+                    current,
+                    add_special_tokens=True,
+                    truncation=False,
+                    padding=False,
+                    verbose=False,
+                )["input_ids"]
+            )
         if target_length > max_length:
             target_truncation_ids.append(item.example_id)
             if item.previous_text:
                 invalid_context_ids.append(item.example_id)
         elif pair_length > max_length:
             context_truncation_ids.append(item.example_id)
-    return {
+    summary = {
         "policy": (
             CONTEXT_POLICY
             if any(item.context_sentences for item in examples)
@@ -293,6 +290,37 @@ def _complete_context_summary(
         "invalidContextCount": len(set(invalid_context_ids)),
         "invalidContextIds": sorted(set(invalid_context_ids)),
     }
+    return lengths, summary
+
+
+def _token_lengths(
+    tokenizer,
+    examples: Sequence[EmotionExample],
+    *,
+    max_length: int,
+    batch_size: int = 512,
+    progress_update: Callable[[int], object] | None = None,
+) -> list[int]:
+    del batch_size
+    lengths, _ = _inspect_examples(
+        tokenizer, examples, max_length=max_length,
+        include_lengths=True, include_context=False, progress_update=progress_update,
+    )
+    return lengths
+
+
+def _complete_context_summary(
+    tokenizer,
+    examples: Sequence[EmotionExample],
+    *,
+    max_length: int,
+    progress_update: Callable[[int], object] | None = None,
+) -> dict[str, object]:
+    _, summary = _inspect_examples(
+        tokenizer, examples, max_length=max_length,
+        include_lengths=False, include_context=True, progress_update=progress_update,
+    )
+    return summary
 
 
 def preflight_training(
@@ -309,6 +337,7 @@ def preflight_training(
     minimum_free_vram_bytes: int = 0,
     minimum_free_disk_bytes: int = 0,
     require_complete_context: bool = False,
+    progress: bool = False,
 ) -> dict[str, object]:
     """Validate local inputs and model cache without running optimization steps."""
 
@@ -363,16 +392,28 @@ def preflight_training(
         }
         del model
 
-    length_report = {
-        split: _length_summary(
-            _token_lengths(tokenizer, examples, max_length=max_length), max_length
-        )
-        for split, examples in splits.items()
-    }
-    complete_context = {
-        split: _complete_context_summary(tokenizer, examples, max_length=max_length)
-        for split, examples in splits.items()
-    }
+    total_rows = sum(len(examples) for examples in splits.values())
+    scan_bar = (
+        tqdm(total=total_rows, desc="预检 输入与上下文", unit="条", dynamic_ncols=True,
+             mininterval=0.5)
+        if progress else None
+    )
+    try:
+        length_report = {}
+        complete_context = {}
+        for split, examples in splits.items():
+            if scan_bar is not None:
+                scan_bar.set_postfix_str(split, refresh=False)
+            lengths, summary = _inspect_examples(
+                tokenizer, examples, max_length=max_length,
+                include_lengths=True, include_context=True,
+                progress_update=scan_bar.update if scan_bar is not None else None,
+            )
+            length_report[split] = _length_summary(lengths, max_length)
+            complete_context[split] = summary
+    finally:
+        if scan_bar is not None:
+            scan_bar.close()
     if require_complete_context:
         failures = {
             split: summary

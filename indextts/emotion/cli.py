@@ -271,22 +271,30 @@ def command_integrate_coverage_data(args) -> int:
 def command_preflight_training(args) -> int:
     from .training_preflight import preflight_training
 
-    _json(
-        preflight_training(
-            args.train,
-            args.dev,
-            args.test,
-            args.output,
-            base_model=args.base_model,
-            max_length=args.max_length,
-            verify_base_weights=args.verify_base_weights,
-            minimum_positive=args.minimum_positive,
-            require_cuda=args.require_cuda,
-            minimum_free_vram_bytes=round(args.minimum_free_vram_gib * 1024**3),
-            minimum_free_disk_bytes=round(args.minimum_free_disk_gib * 1024**3),
-            require_complete_context=args.require_complete_context,
-        )
+    report = preflight_training(
+        args.train,
+        args.dev,
+        args.test,
+        args.output,
+        base_model=args.base_model,
+        max_length=args.max_length,
+        verify_base_weights=args.verify_base_weights,
+        minimum_positive=args.minimum_positive,
+        require_cuda=args.require_cuda,
+        minimum_free_vram_bytes=round(args.minimum_free_vram_gib * 1024**3),
+        minimum_free_disk_bytes=round(args.minimum_free_disk_gib * 1024**3),
+        require_complete_context=args.require_complete_context,
+        progress=args.progress,
     )
+    if args.progress:
+        counts = report["splitCounts"]
+        print(
+            f"[OK] Preflight passed: train={counts['train']} "
+            f"dev={counts['dev']} test={counts['test']} | report={args.output}",
+            flush=True,
+        )
+    else:
+        _json(report)
     return 0
 
 
@@ -491,6 +499,7 @@ def command_validate(args) -> int:
 def command_train(args) -> int:
     from .annotation import file_sha256
     from .brighter import load_brighter_split
+    from .imbalance import ImbalanceConfig, NARRATION_SAMPLING_FORMULA
     from .train import TrainingInterrupted, train_supervised
 
     train_examples = _load_many(args.train)
@@ -509,6 +518,29 @@ def command_train(args) -> int:
         ]
         for split, paths in (("train", args.train), ("dev", args.dev))
     }
+    sampling_options = {
+        "sampling_mode": args.sampling_mode,
+        "narration_fraction": args.narration_fraction,
+    }
+    if args.sampling_mode == "narration-mix":
+        sampling_options["sampling_formula"] = NARRATION_SAMPLING_FORMULA
+    if args.training_objective == "balanced-regression-v1":
+        training_config = ImbalanceConfig(
+            regression_positive_weight=args.regression_positive_weight,
+            regression_auxiliary_weight=args.regression_auxiliary_weight,
+            **sampling_options,
+        )
+    else:
+        training_config = ImbalanceConfig(
+            implementation="positive-aware-regression-v2",
+            loss_mode="balanced-positive-aware-regression",
+            regression_positive_weight=args.regression_positive_weight,
+            regression_auxiliary_weight=args.regression_auxiliary_weight,
+            regression_formula=(
+                "positive-multiplier;auxiliary-positive-multiplier;weighted-mean"
+            ),
+            **sampling_options,
+        )
     try:
         report = train_supervised(
             train_examples,
@@ -530,6 +562,7 @@ def command_train(args) -> int:
             keep_checkpoints=args.keep_checkpoints,
             progress=args.progress,
             input_manifest=input_manifest,
+            training_config=training_config,
         )
     except TrainingInterrupted as exc:
         print(f"INTERRUPTED: {exc}", file=sys.stderr, flush=True)
@@ -850,6 +883,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_training.add_argument("--require-cuda", action="store_true")
     preflight_training.add_argument("--minimum-free-vram-gib", type=float, default=0.0)
     preflight_training.add_argument("--minimum-free-disk-gib", type=float, default=0.0)
+    preflight_training.add_argument("--progress", action="store_true")
     preflight_training.add_argument(
         "--require-complete-context",
         action="store_true",
@@ -1017,6 +1051,18 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--head-learning-rate", type=float, default=1e-4)
     train.add_argument("--intensity-loss-weight", type=float, default=0.35)
     train.add_argument("--neutral-loss-weight", type=float, default=1.0)
+    train.add_argument(
+        "--training-objective",
+        choices=["balanced-regression-v1", "positive-aware-regression-v2"],
+        default="balanced-regression-v1",
+    )
+    train.add_argument("--regression-positive-weight", type=float, default=1.0)
+    train.add_argument("--regression-auxiliary-weight", type=float, default=1.0)
+    train.add_argument(
+        "--sampling-mode", choices=["uniform", "mixed", "narration-mix"],
+        default="uniform",
+    )
+    train.add_argument("--narration-fraction", type=float, default=0.0)
     train.add_argument("--max-length", type=int, default=CONTEXT_MAX_LENGTH)
     train.add_argument("--seed", type=int, default=20260829)
     train.add_argument("--device")

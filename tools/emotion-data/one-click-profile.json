@@ -1,0 +1,38 @@
+{
+  "schema": "readest-emotion-one-click-profile-v1",
+  "datasetDir": "data/emotion/dialogue-stage-20260925-supplement-reviewed-43649",
+  "outputDir": "E:/Projects/Readest-temp/emotion-full-retrain-20260925-reviewed-balanced-v1-progress",
+  "formalCheckpoint": "outputs/emotion-data/macbert-training-dialogue-stage-20260917-deepseek-v3-final-41763-balanced-v1/final",
+  "formalModelSha256": "98876ac84242504012c2124dc414723e4406cceac1c61ac710933b18053500b1",
+  "baseModel": "C:/Users/ADMIN/.cache/huggingface/hub/models--hfl--chinese-macbert-base/snapshots/a986e004d2a7f2a1c2f5a3edef4e20604a974ed1",
+  "baseWeightsSha256": "db0506d985574b80c33eec1cf13bd4c130585568753175871095ca13dbad9e23",
+  "inputSha256": {
+    "train": "fa9fa7e1c5a8a0dc7abe12fb3cfa3079a35ef57322f00c9c5e11bcf0d9b2c01c",
+    "dev": "4cce4c9655ad868587415489ddf78a62600dfaf1121b38d0db4d4b2cbc0631a4",
+    "test": "ad9b59264423c32d69e0302425904eb612ca254844b8c38a482e14753f190dc6"
+  },
+  "expectedTrainRows": 29160,
+  "expectedDevRows": 6234,
+  "expectedTestRows": 8255,
+  "expectedAddedTestRows": 352,
+  "addedIdPrefix": "supp-",
+  "method": {
+    "trainingObjective": "balanced-regression-v1",
+    "samplingMode": "uniform",
+    "epochs": 8,
+    "batchSize": 6,
+    "gradientAccumulation": 4,
+    "learningRate": "2e-5",
+    "headLearningRate": "1e-4",
+    "intensityLossWeight": 0.7,
+    "neutralLossWeight": 3.0,
+    "maxLength": 512,
+    "seed": 20260829,
+    "checkpointSteps": 200,
+    "keepCheckpoints": 2
+  },
+  "resources": {
+    "minimumFreeVramGiB": 0,
+    "minimumFreeDiskGiB": 10
+  }
+}

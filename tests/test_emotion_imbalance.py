@@ -6,15 +6,19 @@ import pytest
 import torch
 from torch.nn import functional as F
 
-from indextts.emotion.imbalance import (ImbalanceConfig, dimension_weights, sampling_weights,
-                                      mixed_batches, exposure_report, strength_bin)
+from indextts.emotion.imbalance import (
+    ImbalanceConfig, NARRATION_SAMPLING_FORMULA, dimension_weights,
+    sampling_weights, mixed_batches, narration_mix_batches, exposure_report,
+    strength_bin,
+)
 from indextts.emotion.imbalance_metrics import detailed_metrics, compare_dev
 from indextts.emotion.model import EmotionModelOutput, masked_emotion_loss
 from indextts.emotion.training_state import epoch_batch_indices
 
 
-def row(labels):
-    return SimpleNamespace(labels=labels, label_mask=[1.] * 8, intensity=max(labels))
+def row(labels, sentence_type='dialogue'):
+    return SimpleNamespace(labels=labels, label_mask=[1.] * 8,
+                           intensity=max(labels), sentence_type=sentence_type)
 
 
 @pytest.mark.parametrize('labels', [[0.] * 8, [1.] * 8, [0., .2, .7, 0., 1., .01, 0., .3]])
@@ -50,6 +54,47 @@ def test_default_loss_preserved_exactly():
     assert 'regressionLoss' not in parts
 
 
+def test_positive_aware_regression_weights_positive_and_auxiliary_elements():
+    labels = torch.tensor([[.8, .2, 0., 0., 0., 0., 0., 0.]])
+    mask = torch.ones_like(labels)
+    intensity = labels.max(1, keepdim=True).values
+    output = EmotionModelOutput(torch.zeros((1, 8)), torch.zeros((1, 1)))
+    _, uniform = masked_emotion_loss(
+        output,
+        labels,
+        mask,
+        intensity,
+        regression_weight=1.0,
+    )
+    _, weighted = masked_emotion_loss(
+        output,
+        labels,
+        mask,
+        intensity,
+        regression_weight=1.0,
+        regression_positive_weight=2.0,
+        regression_auxiliary_weight=1.5,
+    )
+    raw = F.smooth_l1_loss(output.emotion_vector, labels, beta=.1, reduction='none')
+    expected_weights = torch.tensor([[2., 3., 1., 1., 1., 1., 1., 1.]])
+    expected = (raw * expected_weights).sum() / expected_weights.sum()
+    assert weighted['regressionLoss'] == pytest.approx(expected.item())
+    assert weighted['regressionLoss'] != uniform['regressionLoss']
+
+
+def test_positive_aware_config_is_versioned_and_v1_stays_uniform():
+    config = ImbalanceConfig(
+        implementation='positive-aware-regression-v2',
+        loss_mode='balanced-positive-aware-regression',
+        regression_positive_weight=2.0,
+        regression_auxiliary_weight=1.5,
+        regression_formula='positive-multiplier;auxiliary-positive-multiplier;weighted-mean',
+    )
+    assert config.as_dict()['regression_positive_weight'] == 2.0
+    with pytest.raises(ValueError, match='v1 requires'):
+        ImbalanceConfig(regression_positive_weight=2.0)
+
+
 @pytest.mark.parametrize('target', [.1, .35, .8])
 def test_whole_bce_weight_preserves_soft_optimum(target):
     logits = torch.logit(torch.tensor([target], dtype=torch.float64)).requires_grad_()
@@ -80,6 +125,45 @@ def test_train_weights_and_sampler():
     assert sum(len(b) for b in batches) == 20
 
 
+def test_narration_mix_is_deterministic_and_preserves_epoch_size():
+    examples = [row([.5] + [0.] * 7) for _ in range(90)]
+    examples += [row([.4] + [0.] * 7, 'narration') for _ in range(10)]
+    batches = narration_mix_batches(examples, 6, 123, 1, .2)
+    assert batches == narration_mix_batches(examples, 6, 123, 1, .2)
+    assert batches != narration_mix_batches(examples, 6, 123, 2, .2)
+    assert narration_mix_batches(examples, 6, 123, 1, 0) == epoch_batch_indices(100, 6, 123, 1)
+    assert sum(len(batch) for batch in batches) == 100
+    report = exposure_report(examples, batches)
+    assert report['sampleCount'] == 100
+    assert report['sentenceTypeExposure']['narration'] >= 20
+    assert report['uniqueSamples'] + report['duplicateDraws'] == 100
+    assert report['maxMultiplicity'] <= 21
+
+
+def test_narration_mix_config_is_versioned_and_default_fingerprint_compatible():
+    default = ImbalanceConfig().as_dict()
+    assert 'narration_fraction' not in default
+    config = ImbalanceConfig(
+        implementation='positive-aware-regression-v2',
+        loss_mode='balanced-positive-aware-regression',
+        regression_positive_weight=2.0,
+        regression_auxiliary_weight=1.5,
+        regression_formula='positive-multiplier;auxiliary-positive-multiplier;weighted-mean',
+        sampling_mode='narration-mix',
+        narration_fraction=.05,
+        sampling_formula=NARRATION_SAMPLING_FORMULA,
+    )
+    assert config.as_dict()['narration_fraction'] == .05
+    assert config.as_dict()['sampling_formula'] == NARRATION_SAMPLING_FORMULA
+    assert config.as_dict() != default
+    with pytest.raises(ValueError, match='Narration sampling'):
+        ImbalanceConfig(sampling_mode='narration-mix', narration_fraction=.05)
+    with pytest.raises(ValueError, match='Non-narration sampling'):
+        ImbalanceConfig(narration_fraction=.05)
+    with pytest.raises(ValueError, match='requires narration examples'):
+        narration_mix_batches([row([0.] * 8)], 1, 123, 1, .5)
+
+
 def test_metrics_zero_auxiliary_bins():
     y = np.array([[.8, .2, 0, 0, 0, 0, 0, 0], [0.] * 8])
     p = np.array([[.7, .3, .4, 0, 0, 0, 0, 0], [0.] * 8])
@@ -93,6 +177,8 @@ def test_metrics_zero_auxiliary_bins():
 
 
 @pytest.mark.parametrize('kwargs', [{'regression_beta': 0}, {'regression_weight': -1},
+                                   {'regression_positive_weight': 0},
+                                   {'regression_auxiliary_weight': 0},
                                    {'weighted_fraction': 2}, {'sampling_mode': 'unknown'}])
 def test_reject_invalid_config(kwargs):
     with pytest.raises(ValueError):
