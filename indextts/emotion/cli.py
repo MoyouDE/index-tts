@@ -677,6 +677,8 @@ def command_export(args) -> int:
             args.checkpoint,
             args.output,
             release_approval=approval,
+            approve=args.approve,
+            evaluation_report=args.evaluation,
             version=args.version,
             neutral_threshold=args.neutral_threshold,
         )
@@ -1107,6 +1109,8 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--checkpoint", required=True)
     export.add_argument("--output", required=True)
     export.add_argument("--release-approval", help="自动质量验收通过且含证据哈希的 JSON 文件")
+    export.add_argument("--approve", action="store_true", help="明确选定当前版本，无需自动分数门")
+    export.add_argument("--evaluation", help="可选冻结评估报告，记录成绩与未通过项")
     export.add_argument("--version", default="1.0.0")
     export.add_argument("--neutral-threshold", type=float, default=0.15)
     export.set_defaults(func=command_export)

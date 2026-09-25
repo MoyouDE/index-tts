@@ -41,6 +41,8 @@ def export_onnx(
     output_dir: str | Path,
     *,
     release_approval: dict[str, object] | None = None,
+    approve: bool = False,
+    evaluation_report: str | Path | None = None,
     version: str = "1.0.0",
     neutral_threshold: float = 0.15,
 ) -> dict[str, object]:
@@ -50,8 +52,29 @@ def export_onnx(
         raise ValueError("neutral_threshold 必须位于 [0, 1]")
     if release_approval is not None:
         release_approval = validate_release_approval(release_approval)
+    if approve and release_approval is not None:
+        raise ValueError("--approve 与旧版 --release-approval 不可同时使用")
     source = Path(checkpoint_dir)
     target = Path(output_dir)
+    checkpoint_hash = sha256_file(source / "model.safetensors")
+    quality_summary = None
+    if evaluation_report is not None:
+        report_path = Path(evaluation_report)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        candidate = report.get("metrics", {}).get("candidate", {})
+        if candidate.get("modelSha256") != checkpoint_hash:
+            raise ValueError("评估报告与导出 checkpoint 不匹配")
+        test = candidate.get("test", {}).get("all", {})
+        checks = report.get("checks", {})
+        quality_summary = {
+            "evaluationSha256": sha256_file(report_path),
+            "testSampleCount": int(test["sampleCount"]),
+            "testMacroF1": float(test["macroF1"]),
+            "testMacroSpearman": float(test["macroSpearman"]),
+            "testIntensityMae": float(test["intensityMae"]),
+            "automaticChecksPassed": report.get("allGatesPassed"),
+            "failedChecks": sorted(name for name, passed in checks.items() if passed is False),
+        }
     target.mkdir(parents=True, exist_ok=True)
     model, tokenizer = load_checkpoint(source)
     model.float().eval()
@@ -147,10 +170,12 @@ def export_onnx(
         "outputs": ["emotion_vector", "total_intensity"],
         "baseModel": "hfl/chinese-macbert-base",
         "baseModelLicense": "Apache-2.0",
-        "sourceCheckpointSha256": sha256_file(source / "model.safetensors"),
+        "sourceCheckpointSha256": checkpoint_hash,
         "trainingDataPolicy": "curated-readest-emotion-labels",
-        "releaseStatus": "approved" if release_approval is not None else "candidate-unvalidated",
+        "releaseStatus": "approved" if approve or release_approval is not None else "candidate-unvalidated",
+        "releaseBasis": "user-selection" if approve else ("legacy-automatic-gate" if release_approval else None),
         "releaseApproval": release_approval,
+        "qualitySummary": quality_summary,
         "files": {
             name: {"sha256": sha256_file(target / name), "bytes": (target / name).stat().st_size}
             for name in files

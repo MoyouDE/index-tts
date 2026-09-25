@@ -13,27 +13,36 @@ import tempfile
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from indextts.emotion.release import validate_release_approval
-
-
-README = """# Readest 情感模型交接包
-
-这是阅读器端可直接接入的正式 FP32 ONNX 情感模型。
-
-- 版本：`20260919-deepseek-v3-41763-balanced-v1`
-- 正式训练方案：温和维度加权组成 BCE + 八维 Smooth L1，均匀抽样
-- 固定模型：第 8 轮 `final`
-- neutral 阈值：`0.355`（仅用 dev 校准）
-- 测试集：7,903 条
-- Macro F1：`0.6489`
-- Macro Spearman：`0.5884`
-- 八维向量 MAE：`0.0557`
-- 总强度 MAE：`0.0917`
-
-运行时 ABI 为 `readest-emotion-v3`，最大长度 512。`emotion_model.json` 固定标签顺序、上下文策略、special token ID、质量证据摘要和所有包内文件哈希。
-
-接入时复制 manifest 列出的模型与 tokenizer 文件即可；`install-emotion-local.ps1` 会在安装前复核状态、ABI 证据和 SHA-256。
-"""
+def build_readme(manifest: dict) -> str:
+    quality = manifest.get("qualitySummary") or {}
+    lines = [
+        "# Readest 情感模型交接包",
+        "",
+        "这是阅读器端可接入的 FP32 ONNX 情感模型。",
+        "",
+        f"- 版本：`{manifest['version']}`",
+        f"- 发布依据：`{manifest.get('releaseBasis') or 'legacy-automatic-gate'}`",
+        f"- 源 checkpoint SHA-256：`{manifest['sourceCheckpointSha256']}`",
+        f"- neutral 阈值：`{manifest['neutralThreshold']}`（仅用 dev 校准）",
+    ]
+    if quality:
+        lines.extend([
+            f"- 冻结 test：{quality['testSampleCount']} 条",
+            f"- Macro F1：`{quality['testMacroF1']:.4f}`",
+            f"- Macro Spearman：`{quality['testMacroSpearman']:.4f}`",
+            f"- 总强度 MAE：`{quality['testIntensityMae']:.4f}`",
+            f"- 自动检查全部通过：`{quality['automaticChecksPassed']}`",
+            f"- 未通过项：{', '.join(quality['failedChecks']) or '无'}",
+            "",
+            "本版由用户查看冻结评估及上下文样例后选定；未通过项如实保留，不代表自动质量门通过。",
+        ])
+    lines.extend([
+        "",
+        "运行时 ABI 为 `readest-emotion-v3`，最大长度 512。`emotion_model.json` 固定标签顺序、上下文策略、special token ID 和包内文件哈希。",
+        "接入前使用 `install-emotion-local.ps1` 复核状态和 SHA-256。",
+        "",
+    ])
+    return "\n".join(lines)
 
 
 def sha256(path: Path) -> str:
@@ -49,7 +58,6 @@ def load_manifest(source: Path) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("releaseStatus") != "approved":
         raise ValueError("Only an approved model may replace the handoff package")
-    validate_release_approval(manifest.get("releaseApproval"))
     files = manifest.get("files")
     if not isinstance(files, dict) or "emotion.onnx" not in files or "tokenizer.json" not in files:
         raise ValueError("Manifest file inventory is incomplete")
@@ -76,7 +84,7 @@ def publish(source: Path, target: Path, backup: Path) -> dict:
     try:
         for name in [*manifest["files"], "emotion_model.json"]:
             shutil.copy2(source / name, stage / name)
-        (stage / "README.md").write_text(README, encoding="utf-8")
+        (stage / "README.md").write_text(build_readme(manifest), encoding="utf-8")
         load_manifest(stage)
         if target.exists():
             os.replace(target, backup)
