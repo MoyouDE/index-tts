@@ -8,6 +8,7 @@ import json
 import queue
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import IO, Any
 
@@ -20,6 +21,7 @@ class _Task:
     params: dict[str, Any]
     cancelled: threading.Event
     voice_pack: Any
+    submitted_at: float
 
 
 class JsonlSidecar:
@@ -67,6 +69,7 @@ class JsonlSidecar:
                 if task.cancelled.is_set():
                     raise SynthesisCancelled("排队任务已取消")
                 params = task.params
+                queue_ms = (time.perf_counter() - task.submitted_at) * 1000
                 with contextlib.redirect_stdout(self.stderr):
                     result = self.runtime.synthesize(
                         params["text"],
@@ -77,6 +80,9 @@ class JsonlSidecar:
                         seed=params.get("seed"),
                         _voice_pack=task.voice_pack,
                     )
+                timings = result.setdefault("timings", {})
+                timings["queueMs"] = round(queue_ms, 2)
+                timings["requestTotalMs"] = round((time.perf_counter() - task.submitted_at) * 1000, 2)
                 self._ok(task.request_id, result)
             except SynthesisCancelled as exc:
                 self._error(task.request_id, "cancelled", str(exc), exc)
@@ -114,7 +120,8 @@ class JsonlSidecar:
             raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
         validate_seed(params.get("seed"))
         task = _Task(request_id=request_id, params=copy.deepcopy(params),
-                     cancelled=threading.Event(), voice_pack=self.runtime.snapshot_voice(params["voiceId"]))
+                     cancelled=threading.Event(), voice_pack=self.runtime.snapshot_voice(params["voiceId"]),
+                     submitted_at=time.perf_counter())
         with self._tasks_lock:
             if request_id in self._tasks:
                 raise ValueError(f"请求 id 正在使用: {request_id}")

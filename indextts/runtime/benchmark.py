@@ -24,7 +24,7 @@ def main(argv=None):
     parser.add_argument("--output", required=True, help="JSONL output; refuses to overwrite")
     parser.add_argument("--cases", default=str(Path(__file__).resolve().parents[2] / "tests/fixtures/reader-benchmark.json"))
     parser.add_argument("--optimizations", default="all")
-    parser.add_argument("--suite", choices=["smoke", "full", "voices", "alternating"], default="smoke")
+    parser.add_argument("--suite", choices=["smoke", "full", "voices", "alternating", "emotions"], default="smoke")
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--compare", help="Baseline JSONL; exact conditioning/token/PCM digest comparison")
     parser.add_argument("--trace", action="store_true", help="Correctness run (excluded from formal timing claims)")
@@ -64,6 +64,9 @@ def main(argv=None):
     if args.suite == "alternating":
         work = [(cases[0], args.voice_id[index % len(args.voice_id)], emotions[index % 4], 17)
                 for index in range(100)]
+    if args.suite == "emotions":
+        work = [(cases[0], voice, emotion, 17) for voice in args.voice_id
+                for emotion in emotions + [[0.0] * 8]]
     baseline = {}
     baseline_environment = None
     if args.compare:

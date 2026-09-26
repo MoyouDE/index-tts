@@ -1,0 +1,12 @@
+Resolved 203 packages in 2ms
+Downloading torch (3.2GiB)
+WARN Retry attempt #0. Sleeping 1.4891942s before the next attempt
+WARN Retry attempt #1. Sleeping 2.2501345s before the next attempt
+WARN Retry attempt #2. Sleeping 2.2887968s before the next attempt
+Downloading torch (3.2GiB)
+error: Failed to download `torch==2.8.0+cu128`
+  cause: Failed to extract archive: torch-2.8.0+cu128-cp311-cp311-win_amd64.whl
+  cause: I/O operation failed during extraction
+  cause: Failed to download distribution due to network timeout. Try increasing UV_HTTP_TIMEOUT (current value: 120s).
+
+hint: `torch` (v2.8.0+cu128) was included because `indextts` (v2.0.0) depends on `torch`

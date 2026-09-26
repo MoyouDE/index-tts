@@ -19,6 +19,10 @@
 # 使用项目锁文件创建环境；pytest 版本以 uv.lock 为准。
 uv sync --locked --extra test
 
+# 固定远端 revision + 文件 SHA-256，缺失文件才下载，不覆盖已有不匹配文件。
+.venv/Scripts/python.exe -m indextts.runtime.assets fetch
+.venv/Scripts/python.exe -m indextts.runtime.assets verify
+
 # 两套资产保存在不同目录；导出器拒绝覆盖非空目录。
 .venv/Scripts/python.exe -m indextts.runtime.cli export-model --source-model-dir checkpoints --output-dir outputs/reader-fp32 --profile compatible-fp32
 .venv/Scripts/python.exe -m indextts.runtime.cli export-model --source-model-dir checkpoints --output-dir outputs/reader-bf16 --profile fixed-voice-bf16
@@ -69,15 +73,21 @@ JSONL 方法保持不变，合成参数新增可选 `seed`（整数 0 到 2^32�
 ```powershell
 .venv/Scripts/python.exe -m pytest tests/test_reader_runtime.py tests/test_voicepack.py tests/test_reader_optimizations.py -q
 
+# 实际模型隔离测试：禁止参考文件/编码器导入和网络访问，验证切换、取消后恢复。
+$env:INDEXTTS_TEST_MODEL_DIR = 'outputs/reader-bf16'
+.venv/Scripts/python.exe -m pytest tests/test_reader_runtime_gpu.py -q
+
 # 正确性配对：两次独立进程，配置、音色、输入和种子必须相同。
 .venv/Scripts/python.exe -m indextts.runtime.benchmark --model-dir outputs/reader-bf16 --voice-dir outputs/voices-bf16 --voice-id reader-one --optimizations none --trace --output outputs/bench/baseline.jsonl
 .venv/Scripts/python.exe -m indextts.runtime.benchmark --model-dir outputs/reader-bf16 --voice-dir outputs/voices-bf16 --voice-id reader-one --optimizations all --trace --compare outputs/bench/baseline.jsonl --output outputs/bench/optimized.jsonl
 ```
 
-不带 `--trace` 单独测 RTF；trace 会回传张量计算哈希，有额外同步开销。输出拒绝覆盖。`--suite full` 使用已跟踪的 20 文本×指定音色×4 情感×3 种子；传两个 `--voice-id` 即 480 条。`--suite voices` 检查指定音色，`--suite alternating` 做 100 次切换；`--rounds 5` 检查持续运行。输入、配置、资产哈希、设备、库版本和逐条结果记录在 JSONL，旁边生成 summary。
+不带 `--trace` 单独测 RTF；trace 会回传张量计算哈希，有额外同步开销。输出拒绝覆盖。`--suite full` 使用已跟踪的 20 文本×指定音色×4 情感×3 种子；传两个 `--voice-id` 即 480 条。`--suite voices` 检查指定音色，`--suite alternating` 做 100 次切换，`--suite emotions` 检查 base、高兴、悲伤、混合与零向量；`--rounds 5` 检查持续运行。输入、配置、资产哈希、设备、库版本和逐条结果记录在 JSONL，旁边生成 summary。
 
 RTF 从音色静态条件加载后开始计时，至 CPU 波形可用，不计文件写入；分母排除段间附加静音。切换音色耗时、首次请求和加载单独记录。阶段 timings 保留原有计时方式，含 GPU 异步提交的影响，不能据此声称精确阶段占比。
 
 显存同时记录 PyTorch allocated/reserved 与 Windows WDDM 进程 dedicated/shared 100ms 采样。采样不可用时字段为 null 并保存原因；采样峰值永远不宣称严格 ≤3GiB 认证。cudaMallocAsync 的 PyTorch 部分统计不能与 native 等同解释。
 
-本机结果与未验证边界见同目录交接报告。测试通过证明已测优化没有改变对应精度档输出，不证明原模型发音与情感质量问题已经解决。
+本机结果与未验证边界见[交接报告](fixed-voice-optimization-validation.md)。测试通过证明已测优化没有改变对应精度档输出，不证明原模型发音与情感质量问题已经解决。
+
+随仓库保存两份 BF16 实际预计算包和两份原有 FP32 测试包，位于 `tests/fixtures/voices-*`。BF16 参考音频来自锁文件指定的官方演示 revision；不需要音频即可运行回归。生成权重不入 Git，通过上述锁文件和导出命令重建。测试包沿用各自内含许可证和派生声明，不表示参考声音获得了额外用途授权。

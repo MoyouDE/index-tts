@@ -194,8 +194,10 @@ class ReaderRuntime:
                 continue
             for path in sorted(directory.glob("*.ivp")):
                 pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint)
+                provenance = pack.manifest.get("provenance", {})
+                if provenance.get("profile", self.profile) != self.profile:
+                    raise VoicePackError(f"Voice pack precision profile does not match runtime: {path}")
                 if self.profile == BF16:
-                    provenance = pack.manifest.get("provenance", {})
                     if provenance.get("profile") != BF16 or any(
                         provenance.get(key) != value
                         for key, value in self.manifest["voiceCompatibility"].items()
@@ -321,7 +323,7 @@ class ReaderRuntime:
         base = tensors["base_emotion"].to(self.device, dtype=self.dtype)
         # Keep the original mixed-precision sum order: BF16 static projections,
         # FP32 emotion basis/weights. A zero vector is not the calm dimension.
-        if vector is None:
+        if vector is None or not any(vector):
             emotion = base
         else:
             basis = tensors["emotion_basis"].to(self.device, dtype=torch.float32)

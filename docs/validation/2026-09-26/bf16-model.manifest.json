@@ -1,0 +1,74 @@
+{
+  "capabilities": {
+    "automaticEmotionIncluded": false,
+    "emotionModes": [
+      "base",
+      "explicit"
+    ],
+    "languages": [
+      "zh"
+    ],
+    "requiresVoicePack": true,
+    "sampleRate": 22050
+  },
+  "coreModelBytes": 2111007072,
+  "files": {
+    "DISCLAIMER": {
+      "bytes": 2212,
+      "sha256": "3ba7e9e94f823f4bd3a2446c55a7bd1fa71769c4ca733153cc89130f43493b49"
+    },
+    "LICENSE": {
+      "bytes": 10554,
+      "sha256": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343"
+    },
+    "LICENSE_ZH.txt": {
+      "bytes": 7336,
+      "sha256": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f"
+    },
+    "bigvgan.safetensors": {
+      "bytes": 449018644,
+      "sha256": "054e00342ad121da0b93f1fd2ecb0fcf99f7da6b5a0c03969d6b602e2c08e517"
+    },
+    "bigvgan_config.json": {
+      "bytes": 1405,
+      "sha256": "88a1f47acf747db0b21e97a389d838566147f7a5464583ff5c8d819d870f03ee"
+    },
+    "codec.safetensors": {
+      "bytes": 101347232,
+      "sha256": "de1d9bde7bdf1a22bb118a3fd68908ff591b13abcc8d0c853bd4f98772d7afb7"
+    },
+    "config.yaml": {
+      "bytes": 2860,
+      "sha256": "18adf417be3e8f5e2e48e30f7420c719170a6870619436250f360d626877870e"
+    },
+    "gpt.safetensors": {
+      "bytes": 1147900404,
+      "sha256": "238a96228c21653bd086f10e6709a0114063f072c81a4b4d22e14e144608e9f6"
+    },
+    "multilingual_zh_ja_yue_char_del.tiktoken": {
+      "bytes": 907395,
+      "sha256": "747979631e813193436aabcff7c1c235d37de8097b71c563ec8b63b7a515c718"
+    },
+    "s2mel.safetensors": {
+      "bytes": 412740792,
+      "sha256": "b81923a34db395f77d45972d59c9a47858e61515c5235e7c8e49f91097bde6a8"
+    }
+  },
+  "indexTtsVersion": "2.5",
+  "license": "bilibili Model Use License",
+  "precision": {
+    "bigvgan": "float32",
+    "codec": "float32",
+    "float32Matmul": "ieee",
+    "gpt": "bfloat16",
+    "s2mel": "float32"
+  },
+  "profile": "fixed-voice-bf16",
+  "runtimeAbi": "indextts2.5-reader-runtime-v3",
+  "schemaVersion": 1,
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "voiceCompatibility": {
+    "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+    "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c"
+  }
+}

@@ -250,3 +250,29 @@ def test_benchmark_fixture_has_five_valid_length_groups():
     for case in cases:
         minimum, maximum = map(int, case["group"].split("-"))
         assert minimum <= len(case["text"]) <= maximum
+
+
+def test_bf16_zero_vector_uses_base_addition_precision():
+    runtime = ReaderRuntime.__new__(ReaderRuntime)
+    runtime.device, runtime.dtype = torch.device("cpu"), torch.bfloat16
+    tensors = _tensors()
+    torch.manual_seed(12)
+    tensors["speaker_latent"] = torch.randn(1, 1280).bfloat16()
+    tensors["base_emotion"] = torch.randn(1, 1280).bfloat16()
+    runtime._voices = {"voice": SimpleNamespace(tensors=tensors)}
+    base = runtime._voice_condition("voice", None)[0]
+    zero = runtime._voice_condition("voice", [0.0] * 8)[0]
+    assert base.dtype == zero.dtype == torch.bfloat16
+    assert torch.equal(base, zero)
+
+
+@pytest.mark.parametrize("runtime_profile,pack_profile", [(FP32, BF16), (BF16, FP32)])
+def test_runtime_rejects_mixed_explicit_voice_profiles(tmp_path, monkeypatch, runtime_profile, pack_profile):
+    (tmp_path / "voice.ivp").touch()
+    pack = SimpleNamespace(manifest={"provenance": {"profile": pack_profile}})
+    monkeypatch.setattr("indextts.runtime.engine.load_voicepack", lambda *args, **kwargs: pack)
+    runtime = ReaderRuntime.__new__(ReaderRuntime)
+    runtime.voice_dirs, runtime.profile = [tmp_path], runtime_profile
+    runtime.source_fingerprint = "unused"
+    with pytest.raises(VoicePackError, match="precision profile"):
+        runtime.reload_voices()

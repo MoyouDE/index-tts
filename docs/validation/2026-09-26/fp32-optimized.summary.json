@@ -1,0 +1,52 @@
+{
+  "environment": {
+    "python": "3.11.13 (main, Oct  7 2025, 15:29:59) [MSC v.1944 64 bit (AMD64)]",
+    "torch": "2.8.0+cu128",
+    "transformers": "4.52.1",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "gpu": "NVIDIA GeForce RTX 2060",
+    "cuda": "12.8",
+    "cpuThreads": 4,
+    "revision": "c7e670e7000ffd438a07cf92367bc90650cb836b",
+    "allocator": "native",
+    "traceEnabled": true,
+    "profile": "compatible-fp32",
+    "optimizations": {
+      "compact_mask": true,
+      "shared_gpt_mask": true,
+      "broadcast": true,
+      "dynamic_cache": true,
+      "cpu_beam": true,
+      "incremental_position": true,
+      "euler_invariants": true,
+      "discard_euler_history": true,
+      "inference_mode": true,
+      "voice_cache": true,
+      "release_intermediates": true
+    },
+    "modelManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967",
+    "voiceHashes": {
+      "middle-aged-male-serious-steady": "c883da25ca89235bd9ef7247ab44cd639a59f488c6839bdc1be9cf8e0170f796"
+    }
+  },
+  "requests": 3,
+  "mismatches": [],
+  "strictVramTargetCertified": false,
+  "groups": {
+    "10-20": {
+      "n": 1,
+      "medianRtf": 1.361259524605503,
+      "p95Rtf": 1.361259524605503
+    },
+    "21-40": {
+      "n": 1,
+      "medianRtf": 1.3226731238344058,
+      "p95Rtf": 1.3226731238344058
+    },
+    "41-60": {
+      "n": 1,
+      "medianRtf": 1.4051037022713024,
+      "p95Rtf": 1.4051037022713024
+    }
+  }
+}
