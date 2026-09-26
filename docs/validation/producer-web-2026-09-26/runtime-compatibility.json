@@ -1,0 +1,23 @@
+{
+  "compatible-fp32": {
+    "acceptedVoiceIds": [
+      "parity-1",
+      "parity-2"
+    ],
+    "runtimeAbi": "indextts2.5-reader-runtime-v2",
+    "voiceCompatibility": null,
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253"
+  },
+  "fixed-voice-bf16": {
+    "acceptedVoiceIds": [
+      "parity-1",
+      "parity-2"
+    ],
+    "runtimeAbi": "indextts2.5-reader-runtime-v3",
+    "voiceCompatibility": {
+      "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+      "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c"
+    },
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253"
+  }
+}

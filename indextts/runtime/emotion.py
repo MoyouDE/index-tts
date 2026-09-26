@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import hashlib
 import time
+import math
+from dataclasses import asdict
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Sequence
@@ -77,6 +79,13 @@ class ExplicitEmotionProvider(EmotionProvider):
 class OnnxEmotionProvider(EmotionProvider):
     """FP32 MacBERT provider used for validation outside the Readest Rust host."""
 
+    @staticmethod
+    def _validate_threshold(value):
+        number = float(value)
+        if not math.isfinite(number) or not 0 <= number <= 1:
+            raise ValueError("neutral_threshold 必须位于 [0, 1]")
+        return number
+
     def __init__(self, model_path: str | Path, *, neutral_threshold: float | None = None):
         candidate = Path(model_path).resolve()
         self.model_dir = candidate.parent if candidate.is_file() else candidate
@@ -112,8 +121,11 @@ class OnnxEmotionProvider(EmotionProvider):
             or manifest.get("sameLineNextOnly") is not True
         ):
             raise ValueError("ONNX 情感模型上文策略无效")
+        self.model_threshold = self._validate_threshold(manifest.get("neutralThreshold", 0.15))
         if self.neutral_threshold is None:
-            self.neutral_threshold = float(manifest.get("neutralThreshold", 0.15))
+            self.neutral_threshold = self.model_threshold
+        self.neutral_threshold = self._validate_threshold(self.neutral_threshold)
+        self.model_manifest = manifest
         self.max_length = int(manifest.get("maxLength", 0))
         if self.max_length != CONTEXT_MAX_LENGTH:
             raise ValueError(f"ONNX 情感模型 manifest 的 maxLength 必须为 {CONTEXT_MAX_LENGTH}")
@@ -147,8 +159,15 @@ class OnnxEmotionProvider(EmotionProvider):
         sentences: Sequence[dict[str, object]],
         target_sentence_id: object,
     ) -> list[float]:
+        return self.analyze_window_details(sentences, target_sentence_id)["vector"]
+
+    def analyze_window_details(self, sentences, target_sentence_id, *, neutral_threshold=None):
+        """One inference with raw outputs, threshold decision and exact context."""
+        started = time.perf_counter()
         self._load()
         import numpy as np
+
+        threshold = self._validate_threshold(self.neutral_threshold if neutral_threshold is None else neutral_threshold)
 
         selection = select_target_context(
             sentences,
@@ -172,6 +191,7 @@ class OnnxEmotionProvider(EmotionProvider):
         )
         if "token_type_ids" not in batch:
             batch["token_type_ids"] = np.zeros_like(batch["input_ids"])
+        inference_started = time.perf_counter()
         vector, intensity = self._session.run(
             ["emotion_vector", "total_intensity"],
             {
@@ -183,10 +203,19 @@ class OnnxEmotionProvider(EmotionProvider):
             raise ValueError(
                 f"ONNX 情感模型输出形状无效: vector={vector.shape}, intensity={intensity.shape}"
             )
+        if not np.isfinite(vector).all() or not np.isfinite(intensity).all():
+            raise ValueError("ONNX 情感模型输出包含非有限数值")
         self.warning = None
-        if float(intensity[0, 0]) < float(self.neutral_threshold):
-            return [0.0] * 8
-        return [max(0.0, min(1.0, float(value))) for value in vector[0]]
+        raw = [float(value) for value in vector[0]]
+        base = float(intensity[0, 0]) < threshold
+        return {
+            "rawVector": raw, "totalIntensity": float(intensity[0, 0]),
+            "threshold": threshold, "baseFallback": base,
+            "vector": [0.0] * 8 if base else [max(0.0, min(1.0, value)) for value in raw],
+            "context": asdict(selection),
+            "timings": {"inferenceMs": (time.perf_counter() - inference_started) * 1000,
+                        "totalMs": (time.perf_counter() - started) * 1000},
+        }
 
     def analyze_context(
         self,

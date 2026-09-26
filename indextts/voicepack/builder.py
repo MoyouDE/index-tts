@@ -48,7 +48,7 @@ def model_fingerprint(model_dir: str | Path, cfg_path: str | Path | None = None)
 
 
 class VoicePackBuilder:
-    """Developer-side builder. The full model is loaded only when required."""
+    """Lazy reference-only producer, also accepting an existing full TTS instance."""
 
     def __init__(
         self,
@@ -74,16 +74,20 @@ class VoicePackBuilder:
 
     def _get_tts(self):
         if self._tts is None:
-            from indextts.infer_v2_5 import IndexTTS2
+            from .reference import ReferenceEncoder
 
-            self._tts = IndexTTS2(
+            self._tts = ReferenceEncoder(
                 cfg_path=str(self.cfg_path),
                 model_dir=str(self.model_dir),
                 device=self.device,
                 use_bf16=self.use_bf16,
-                use_qwen_emo=False,
             )
         return self._tts
+
+    def close(self):
+        if self._tts is not None and hasattr(self._tts, "close"):
+            self._tts.close()
+        self._tts = None
 
     def source_model_fingerprint(self) -> str:
         """Return and cache the fingerprint used to validate compatible packs."""
@@ -103,6 +107,8 @@ class VoicePackBuilder:
         voice_id = str(metadata.get("voiceId", "")).strip()
         display_name = str(metadata.get("displayName", metadata.get("name", ""))).strip()
         gender = str(metadata.get("gender", "unknown")).strip().lower()
+        from .schema import validate_identity
+        validate_identity(voice_id, display_name, gender)
 
         tts = self._get_tts()
         if self.profile == "fixed-voice-bf16":

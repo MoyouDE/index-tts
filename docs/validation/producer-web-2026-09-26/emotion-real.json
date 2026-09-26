@@ -1,0 +1,346 @@
+{
+  "modelManifest": {
+    "baseModel": "hfl/chinese-macbert-base",
+    "baseModelLicense": "Apache-2.0",
+    "conditioningAbi": "readest-emotion-v3",
+    "contextEncoding": "tgt-type-marked-single-sequence-v1",
+    "contextPolicy": "target-prev-next-same-line-backfill-prev-section-v1",
+    "files": {
+      "THIRD_PARTY_NOTICES.md": {
+        "bytes": 78,
+        "sha256": "86d9bff821a187eb56fda32c4b630c076e84865c86c443fd372b0e4df633090a"
+      },
+      "added_tokens.json": {
+        "bytes": 106,
+        "sha256": "520a39ddc2b3297df615a7431ecb2c5eafa02687d21f0bf9856947c207fe9e76"
+      },
+      "emotion.onnx": {
+        "bytes": 407096367,
+        "sha256": "d735aa76e3729466220f7face64cee6c50e8a7ee7d8275c50f2e271b0ae737b6"
+      },
+      "special_tokens_map.json": {
+        "bytes": 1507,
+        "sha256": "7654c346862ab11c1a78559e4880a341b4bc4ee2886aa6d90837504751f34a48"
+      },
+      "tokenizer.json": {
+        "bytes": 440035,
+        "sha256": "fa5220c4785c003db2511e64f8d20f84b9fd008bbc79f58768401a730e299add"
+      },
+      "tokenizer_config.json": {
+        "bytes": 2321,
+        "sha256": "98a0b07dbc44fcf7203691c8514f3d7c70c3d8973caefb8c637decc5f3b322de"
+      },
+      "vocab.txt": {
+        "bytes": 109540,
+        "sha256": "45bbac6b341c319adc98a532532882e91a9cefc0329aa57bac9ae761c27b291c"
+      }
+    },
+    "inputs": [
+      "input_ids",
+      "attention_mask",
+      "token_type_ids"
+    ],
+    "labels": [
+      "happy",
+      "angry",
+      "sad",
+      "afraid",
+      "disgusted",
+      "melancholic",
+      "surprised",
+      "calm"
+    ],
+    "language": "zh",
+    "maxLength": 512,
+    "neutralThreshold": 0.355,
+    "outputs": [
+      "emotion_vector",
+      "total_intensity"
+    ],
+    "package": "readest-macbert-emotion",
+    "precision": "fp32",
+    "releaseApproval": {
+      "inputSha256": {
+        "devMetrics": "76ac8508ca015d9c5bcf7f0833197b1b898acbfbad4a6f1a5deef93a482409e6",
+        "experimentAudit": "5f8a14b9dd46e81f41199149da04f1fdb3248c0e3a684b29f3f625f3e3473669",
+        "testMetrics": "5ee34c694442c82c9050f6feab88fde79cc125593fb29b56ddba7c9120edae89",
+        "trainingReport": "f47bcb881b86ae591bbe6aca4bc5ce81da81ef37f99f73903629315e9128492c"
+      },
+      "qualityGatePassed": true,
+      "qualitySummary": {
+        "devMacroF1": 0.6356073622331183,
+        "testIntensityMae": 0.09173981728524584,
+        "testMacroF1": 0.648910814679369,
+        "testMacroSpearman": 0.5884204336008843
+      },
+      "schemaVersion": 2,
+      "selectedCandidate": "A-loss",
+      "selectionPolicy": "experiment-comparison-and-user-selection"
+    },
+    "releaseStatus": "approved",
+    "sameLineNextOnly": true,
+    "schemaVersion": 1,
+    "sectionBoundary": "strict",
+    "sourceCheckpointSha256": "98876ac84242504012c2124dc414723e4406cceac1c61ac710933b18053500b1",
+    "specialTokenIds": {
+      "[/TGT]": 21129,
+      "[NL]": 21132,
+      "[TGT]": 21128,
+      "[对白]": 21131,
+      "[旁白]": 21130
+    },
+    "specialTokens": [
+      "[TGT]",
+      "[/TGT]",
+      "[旁白]",
+      "[对白]",
+      "[NL]"
+    ],
+    "trainingDataPolicy": "curated-readest-emotion-labels",
+    "version": "20260919-deepseek-v3-41763-balanced-v1"
+  },
+  "manifestSha256": "27551a6d6e674c23a0ea5e34f1970521a50fadf56d0fba706edd64160954dbe0",
+  "executionProviders": [
+    "CPUExecutionProvider"
+  ],
+  "cases": {
+    "single": {
+      "input": [
+        {
+          "sentenceId": "target",
+          "text": "太好了，我们终于成功了！",
+          "sentenceType": "dialogue",
+          "sectionId": "chapter",
+          "lineIndex": 0
+        }
+      ],
+      "details": {
+        "rawVector": [
+          0.869644820690155,
+          0.008136234246194363,
+          0.002647091168910265,
+          0.004529927857220173,
+          0.0071021681651473045,
+          0.002749508013948798,
+          0.01591666042804718,
+          0.009008880704641342
+        ],
+        "totalIntensity": 0.8717747330665588,
+        "threshold": 0.355,
+        "baseFallback": false,
+        "vector": [
+          0.869644820690155,
+          0.008136234246194363,
+          0.002647091168910265,
+          0.004529927857220173,
+          0.0071021681651473045,
+          0.002749508013948798,
+          0.01591666042804718,
+          0.009008880704641342
+        ],
+        "context": {
+          "selected_positions": [
+            0
+          ],
+          "selected_sentence_ids": [
+            "target"
+          ],
+          "rendered_text": "[TGT][对白]太好了，我们终于成功了！[/TGT]",
+          "input_token_count": 17,
+          "target_token_count": 17,
+          "previous_sentence_count": 0,
+          "next_sentence_included": false,
+          "context_limited": false,
+          "target_truncated": false,
+          "stop_reason": "section-start"
+        },
+        "timings": {
+          "inferenceMs": 19.344899999850895,
+          "totalMs": 19.90490000025602
+        }
+      },
+      "legacyEqual": true
+    },
+    "context": {
+      "input": [
+        {
+          "sentenceId": "previous",
+          "text": "暴风雨过去，他终于平安回来了。",
+          "sentenceType": "narration",
+          "sectionId": "chapter",
+          "lineIndex": 0
+        },
+        {
+          "sentenceId": "target",
+          "text": "太好了，我一直在等你！",
+          "sentenceType": "dialogue",
+          "sectionId": "chapter",
+          "lineIndex": 0
+        },
+        {
+          "sentenceId": "next",
+          "text": "她激动地迎了上去。",
+          "sentenceType": "narration",
+          "sectionId": "chapter",
+          "lineIndex": 0
+        }
+      ],
+      "details": {
+        "rawVector": [
+          0.7858354449272156,
+          0.0026403998490422964,
+          0.0033941667061299086,
+          0.002962501486763358,
+          0.0018826236482709646,
+          0.00395124452188611,
+          0.009245033375918865,
+          0.016035031527280807
+        ],
+        "totalIntensity": 0.7867187261581421,
+        "threshold": 0.355,
+        "baseFallback": false,
+        "vector": [
+          0.7858354449272156,
+          0.0026403998490422964,
+          0.0033941667061299086,
+          0.002962501486763358,
+          0.0018826236482709646,
+          0.00395124452188611,
+          0.009245033375918865,
+          0.016035031527280807
+        ],
+        "context": {
+          "selected_positions": [
+            0,
+            1,
+            2
+          ],
+          "selected_sentence_ids": [
+            "previous",
+            "target",
+            "next"
+          ],
+          "rendered_text": "[旁白]暴风雨过去，他终于平安回来了。[TGT][对白]太好了，我一直在等你！[/TGT][旁白]她激动地迎了上去。",
+          "input_token_count": 42,
+          "target_token_count": 16,
+          "previous_sentence_count": 1,
+          "next_sentence_included": true,
+          "context_limited": false,
+          "target_truncated": false,
+          "stop_reason": "section-exhausted"
+        },
+        "timings": {
+          "inferenceMs": 30.680999996548053,
+          "totalMs": 31.650500000978354
+        }
+      },
+      "legacyEqual": true
+    },
+    "long-target": {
+      "input": [
+        {
+          "sentenceId": "target",
+          "text": "他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。",
+          "sentenceType": "dialogue",
+          "sectionId": "chapter",
+          "lineIndex": 0
+        }
+      ],
+      "details": {
+        "rawVector": [
+          0.46492424607276917,
+          0.0006983637576922774,
+          0.13028696179389954,
+          0.00509088858962059,
+          0.00048175317351706326,
+          0.5310105085372925,
+          0.009714704006910324,
+          0.08096936345100403
+        ],
+        "totalIntensity": 0.5754290819168091,
+        "threshold": 0.355,
+        "baseFallback": false,
+        "vector": [
+          0.46492424607276917,
+          0.0006983637576922774,
+          0.13028696179389954,
+          0.00509088858962059,
+          0.00048175317351706326,
+          0.5310105085372925,
+          0.009714704006910324,
+          0.08096936345100403
+        ],
+        "context": {
+          "selected_positions": [
+            0
+          ],
+          "selected_sentence_ids": [
+            "target"
+          ],
+          "rendered_text": "[TGT][对白]他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于平安回来了。他终于[/TGT]",
+          "input_token_count": 512,
+          "target_token_count": 905,
+          "previous_sentence_count": 0,
+          "next_sentence_included": false,
+          "context_limited": false,
+          "target_truncated": true,
+          "stop_reason": "target-over-max"
+        },
+        "timings": {
+          "inferenceMs": 375.79270000424003,
+          "totalMs": 393.22550000360934
+        }
+      },
+      "legacyEqual": true
+    },
+    "temporary-threshold": {
+      "rawVector": [
+        0.7858354449272156,
+        0.0026403998490422964,
+        0.0033941667061299086,
+        0.002962501486763358,
+        0.0018826236482709646,
+        0.00395124452188611,
+        0.009245033375918865,
+        0.016035031527280807
+      ],
+      "totalIntensity": 0.7867187261581421,
+      "threshold": 1.0,
+      "baseFallback": true,
+      "vector": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "context": {
+        "selected_positions": [
+          0,
+          1,
+          2
+        ],
+        "selected_sentence_ids": [
+          "previous",
+          "target",
+          "next"
+        ],
+        "rendered_text": "[旁白]暴风雨过去，他终于平安回来了。[TGT][对白]太好了，我一直在等你！[/TGT][旁白]她激动地迎了上去。",
+        "input_token_count": 42,
+        "target_token_count": 16,
+        "previous_sentence_count": 1,
+        "next_sentence_included": true,
+        "context_limited": false,
+        "target_truncated": false,
+        "stop_reason": "section-exhausted"
+      },
+      "timings": {
+        "inferenceMs": 33.78740000334801,
+        "totalMs": 35.11489999800688
+      }
+    }
+  }
+}

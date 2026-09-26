@@ -42,6 +42,15 @@ class VoicePackSchemaError(ValueError):
     """Raised when a voice-pack manifest or tensor set is invalid."""
 
 
+def validate_identity(voice_id, display_name, gender):
+    if not isinstance(voice_id, str) or not _VOICE_ID.fullmatch(voice_id):
+        raise VoicePackSchemaError("voiceId 必须为 1-64 位字母、数字、点、下划线或连字符")
+    if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 128:
+        raise VoicePackSchemaError("displayName 必须为 1-128 个字符")
+    if gender not in {"female", "male", "neutral", "unknown"}:
+        raise VoicePackSchemaError("gender 必须为 female、male、neutral 或 unknown")
+
+
 def validate_manifest(manifest: Mapping[str, Any]) -> None:
     required = {
         "schemaVersion",

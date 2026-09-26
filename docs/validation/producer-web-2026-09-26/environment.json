@@ -1,0 +1,16 @@
+{
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.13",
+  "gpu": "NVIDIA GeForce RTX 2060",
+  "gpuTotalBytes": 6442123264,
+  "cuda": "12.8",
+  "packages": {
+    "torch": "2.8.0+cu128",
+    "torchaudio": "2.8.0+cu128",
+    "librosa": "0.10.2.post1",
+    "transformers": "4.52.1",
+    "gradio": "5.45.0",
+    "onnxruntime": "1.23.2"
+  },
+  "cpuThreadsForProducer": 4
+}

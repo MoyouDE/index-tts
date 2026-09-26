@@ -1,6 +1,6 @@
 # Readest 音色包与轻量运行时
 
-本分支把 IndexTTS-2.5 的“参考音频编码”和“语音生成”拆成两个阶段。开发者机器使用完整模型把参考 WAV 转为 `.ivp`；阅读器运行时只读取 `.ivp` 和裁剪模型，不会读取或重新编码参考音频。
+本分支把 IndexTTS-2.5 的“参考音频编码”和“语音生成”拆成两个阶段。开发者机器默认使用独立参考编码器把参考音频转为 `.ivp`，读取源 checkpoint 中所需权重，不初始化语音生成网络；阅读器运行时只读取 `.ivp` 和裁剪模型，不会读取或重新编码参考音频。独立制包及情感验证页面见 [启动与验证说明](producer-validation-web.md)。旧 WebUI 仍可向制包器传入已经加载的完整 TTS 实例。
 
 ## 制作音色包
 
@@ -13,8 +13,7 @@ indextts-voicepack build `
   --name "阅读女声" `
   --gender female `
   --model-dir .\checkpoints `
-  --output .\voices\reader-female-01.ivp `
-  --fp16
+  --output .\voices\reader-female-01.ivp
 ```
 
 IndexTTS-2.5 WebUI 将使用和制作分成两个页签。“音频生成”页顶部只显示当前引用音色包，不提供重复的选择列表；官方示例从页面下方“快速设置”表选择，自定义包则通过拖入 `.ivp` 应用。选中后直接使用预计算张量，不会读取或编码参考 WAV。“音色包制作”页单独提供参考音频、音色 ID、名称、性别和生成下载入口；制作完成后会自动安装并应用。拖入或制作的包都必须先通过 schema、哈希和源模型指纹校验。
@@ -48,7 +47,7 @@ indextts-runtime export-model `
 indextts-runtime doctor --model-dir ..\index-tts-package\ModulePackage\model
 ```
 
-质量优先导出结果保留 FP32 GPT 生成部分、FP32 s2mel、decoder-only semantic codec 和 FP32 BigVGAN，并强制关闭 TF32 矩阵计算。Wav2Vec-BERT、CAMPPlus、GPT speaker/emotion conditioner、`text_head` 和 codec encoder 不会进入运行时模型。核心文件上限为 3.2GiB，并写入 `runtime_model.json` 哈希与精度清单。音色包生成器默认也使用 FP32；`--fp16` 仅作为显式选择保留。
+质量优先导出结果保留 FP32 GPT 生成部分、FP32 s2mel、decoder-only semantic codec 和 FP32 BigVGAN，并强制关闭 TF32 矩阵计算。Wav2Vec-BERT、CAMPPlus、GPT speaker/emotion conditioner、`text_head` 和 codec encoder 不会进入运行时模型。核心文件上限为 3.2GiB，并写入 `runtime_model.json` 哈希与精度清单。音色包生成器默认也使用 FP32；独立制包的 BF16 档需要显式选择，具体参数见 CLI 的 `--help`。
 
 ## Python API
 

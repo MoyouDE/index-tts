@@ -72,6 +72,10 @@ dependencies = [
 webui = [
   "gradio==5.45.0",
 ]
+validation-web = [
+  "gradio==5.45.0",
+  "onnxruntime==1.23.2",
+]
 # To install the DeepSpeed support, use `uv sync --extra deepspeed` (or `--all-extras`).
 deepspeed = [
   "deepspeed==0.17.1",
