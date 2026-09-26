@@ -1,0 +1,8 @@
+Using Python 3.11.13 environment at: outputs\repro-venv
+Resolved 1 package in 52ms
+Prepared 1 package in 37.09s
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 1 package in 38.73s
+ + torch==2.8.0+cu128 (from file:///D:/Workspaces/Readest/index-tts/outputs/repro-wheel/torch-2.8.0+cu128-cp311-cp311-win_amd64.whl)

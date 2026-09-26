@@ -1,0 +1,39 @@
+.                                                                        [100%]
+============================== warnings summary ===============================
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\transformers\configuration_utils.py:312: UserWarning: Passing `gradient_checkpointing` to a config initialization is deprecated and will be removed in v5 Transformers. Using `model.gradient_checkpointing_enable()` instead, or if you are using the `Trainer` API, pass `gradient_checkpointing=True` in your `TrainingArguments`.
+    warnings.warn(
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\torch\nn\utils\weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+    WeightNorm.apply(module, name, dim)
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\audiotools\core\audio_signal.py:32: DeprecationWarning: invalid escape sequence '\_'
+    """
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\audiotools\core\audio_signal.py:1012: DeprecationWarning: invalid escape sequence '\_'
+    """Wrapper around scipy.signal.get_window so one can also get the
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\audiotools\core\audio_signal.py:1092: DeprecationWarning: invalid escape sequence '\_'
+    """Compute how the STFT should be padded, based on match\_stride.
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\audiotools\core\audio_signal.py:1131: DeprecationWarning: invalid escape sequence '\_'
+    """Computes the short-time Fourier transform of the audio data,
+
+tests/test_reader_runtime_gpu.py::test_reference_free_runtime_switch_cancel_and_recovery
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\audiotools\core\audio_signal.py:1222: DeprecationWarning: invalid escape sequence '\_'
+    """Computes inverse STFT and sets it to audio\_data.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 9 warnings in 131.67s (0:02:11)
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

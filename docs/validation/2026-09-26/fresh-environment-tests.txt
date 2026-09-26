@@ -1,0 +1,16 @@
+..............................................................           [100%]
+============================== warnings summary ===============================
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+tests/test_reader_optimizations.py::test_compact_mask_preserves_positions_and_broadcast_output[False]
+tests/test_reader_optimizations.py::test_compact_mask_preserves_positions_and_broadcast_output[True]
+  D:\Workspaces\Readest\index-tts\outputs\repro-venv\Lib\site-packages\torch\nn\utils\weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+    WeightNorm.apply(module, name, dim)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+62 passed, 4 warnings in 97.23s (0:01:37)
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

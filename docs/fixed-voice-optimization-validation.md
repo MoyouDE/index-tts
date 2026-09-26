@@ -52,4 +52,14 @@ Windows 11 build 26200，RTX 2060 6GB，i7-9750H；Python 3.11.13、PyTorch 2.8.
 - BF16 与 FP32 档的采样规则不同，不把跨档音频差异当作优化回归；正确性比较始终在同一精度档内进行。
 - 本轮没有主观听感盲评，没有重训音色或情感模型，也没有接入/改动主仓库阅读器。
 
-全新环境复现未完成：`uv sync --locked --extra test` 的 PyTorch wheel 下载先后遇到 TLS EOF 和下载超时。其余依赖已从锁文件装入隔离环境；大型 wheel 的分片续传尚未完成，已停止该额外下载，不把它记作全新环境测试通过。上述 62+1 项测试均运行在已有环境，测试前 pytest 已更新至锁定的 9.0.3。错误日志随报告保存；在网络可用的设备继续执行实施说明中的 `uv sync --locked --extra test` 即可重新验证。
+## 独立环境重试验证
+
+此前 `uv sync --locked --extra test` 的 PyTorch wheel 下载先后遇到 TLS EOF 和下载超时；原失败日志保留。收到重试请求后，复用已安装的 Python 3.11.13，在 `outputs/repro-venv` 独立环境中完成安装，不依赖原 `.venv` 的 site-packages，也无需额外安装 Anaconda。
+
+下载从原有分片继续，源 URL 与预期 SHA-256 均取自 `uv.lock`。413 个 HTTP Range 分片合并后的 wheel 为 3,461,420,395 bytes，SHA-256 为 `34c55443aafd31046a7963b63d30bc3b628ee4a704f826796c865fdfd05bb596`，与锁文件完全一致。将该 wheel 以 `uv pip install --no-deps --python outputs/repro-venv/Scripts/python.exe <wheel>` 安装；其余依赖此前通过锁文件装入。
+
+独立环境的 128 个已安装包全部通过 `uv pip check`，逐一核对版本均存在于 `uv.lock`。新环境重跑 **62 项回归全部通过**，真实 BF16 模型离线隔离测试 **1 项通过**。GPU 权重和测试音色复用已有、经过哈希校验的资产；本次没有重新下载全部模型资产。
+
+另以两种音色、三个文本长度共 **6 条**真实 BF16 请求，与已有环境的 optimized 报告逐条配对：conditioning、语义 token 和 PCM 哈希全部一致，`mismatches=[]`。原始记录见 [bf16-fresh-environment.jsonl](validation/2026-09-26/bf16-fresh-environment.jsonl)；本轮仍开启 trace，不将其计时当作正式性能结论。
+
+环境路径、包版本、锁文件哈希及 wheel 校验信息保存于 [fresh-environment.json](validation/2026-09-26/fresh-environment.json)，对应安装与测试日志一并保存。下载文件和 Python 环境本身不提交 Git。
