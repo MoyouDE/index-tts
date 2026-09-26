@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--source-model-dir", required=True)
     export.add_argument("--output-dir", required=True)
     export.add_argument("--config")
+    export.add_argument("--profile", choices=["compatible-fp32", "fixed-voice-bf16"], default="compatible-fp32")
 
     doctor = subcommands.add_parser("doctor", help="Validate runtime files and CUDA support")
     doctor.add_argument("--model-dir", required=True)
@@ -29,6 +31,10 @@ def _parser() -> argparse.ArgumentParser:
     serve.add_argument("--device", default="cuda:0")
     serve.add_argument("--emotion-backend", choices=["none", "qwen", "explicit"], default="none")
     serve.add_argument("--qwen-model-dir")
+    serve.add_argument("--optimizations", default="all", help="all, none, or comma-separated optimization names")
+    serve.add_argument("--cpu-threads", type=int, default=4)
+    serve.add_argument("--performance-cores", action="store_true")
+    serve.add_argument("--allocator", choices=["native", "cudaMallocAsync"])
     return parser
 
 
@@ -37,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export-model":
         from .model_export import export_runtime_model
 
-        manifest = export_runtime_model(args.source_model_dir, args.output_dir, cfg_path=args.config)
+        manifest = export_runtime_model(args.source_model_dir, args.output_dir, cfg_path=args.config, profile=args.profile)
         print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     if args.command == "doctor":
@@ -63,6 +69,15 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     if args.command == "serve":
+        if args.allocator:
+            if "torch" in sys.modules:
+                raise RuntimeError("Allocator selection requires a fresh process before importing torch")
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"] = f"backend:{args.allocator}"
+        import torch
+        from .profiles import InferenceOptimizations
+        if args.cpu_threads < 1:
+            raise ValueError("cpu-threads must be positive")
+        torch.set_num_threads(args.cpu_threads)
         from .emotion import ExplicitEmotionProvider, QwenEmotionProvider
         from .engine import ReaderRuntime
         from .sidecar import JsonlSidecar
@@ -82,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
                 provider,
                 args.device,
                 cache_dir=args.cache_dir,
+                optimizations=InferenceOptimizations.parse(args.optimizations),
+                prefer_performance_cores=args.performance_cores,
             )
         return JsonlSidecar(runtime).serve()
     return 2

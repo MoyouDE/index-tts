@@ -24,6 +24,7 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--config")
     build.add_argument("--device")
     build.add_argument("--fp16", action="store_true", help="Use BF16 on supported GPUs")
+    build.add_argument("--profile", choices=["compatible-fp32", "fixed-voice-bf16"])
 
     inspect = subcommands.add_parser("inspect", help="Print a pack manifest")
     inspect.add_argument("pack")
@@ -38,11 +39,14 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "build":
+        if args.fp16 and args.profile:
+            raise ValueError("Use --profile or legacy --fp16, not both")
         builder = VoicePackBuilder(
             model_dir=args.model_dir,
             cfg_path=args.config,
             device=args.device,
             use_bf16=args.fp16,
+            profile=args.profile,
         )
         output = builder.build(
             args.reference,

@@ -204,7 +204,10 @@ class _FakeRuntime:
     def reload_voices(self):
         return self.list_voices()
 
-    def synthesize(self, text, voice_id, emotion, duration_factor, _cancelled):
+    def snapshot_voice(self, voice_id):
+        return voice_id
+
+    def synthesize(self, text, voice_id, emotion, duration_factor, _cancelled, **kwargs):
         self.emotions.append(emotion)
         self.started.set()
         while not self.release.wait(0.01):

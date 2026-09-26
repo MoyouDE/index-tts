@@ -59,12 +59,17 @@ class VoicePackBuilder:
         device: str | None = None,
         use_bf16: bool = False,
         source_model_fingerprint: str | None = None,
+        profile: str | None = None,
     ) -> None:
         self._tts = tts
         self.model_dir = Path(model_dir).resolve()
         self.cfg_path = Path(cfg_path).resolve() if cfg_path else self.model_dir / "config.yaml"
         self.device = device
-        self.use_bf16 = use_bf16
+        from indextts.runtime.profiles import BF16, PROFILES
+        if profile is not None and profile not in PROFILES:
+            raise ValueError(f"Unknown profile: {profile}")
+        self.profile = profile
+        self.use_bf16 = profile == BF16 if profile else use_bf16
         self._source_model_fingerprint = source_model_fingerprint
 
     def _get_tts(self):
@@ -100,6 +105,10 @@ class VoicePackBuilder:
         gender = str(metadata.get("gender", "unknown")).strip().lower()
 
         tts = self._get_tts()
+        if self.profile == "fixed-voice-bf16":
+            import torch
+            if getattr(tts, "dtype", None) != torch.bfloat16:
+                raise ValueError("BF16 pack requires actual BF16 reference precomputation")
         tensors = tts.extract_voice_conditioning(str(reference), verbose=False)
         fingerprint = self.source_model_fingerprint()
         manifest = {
@@ -120,6 +129,19 @@ class VoicePackBuilder:
                 "voiceRights": "provided-separately",
             },
         }
+        if self.profile is not None:
+            from importlib.metadata import version
+            from .provenance import PREPROCESS_FINGERPRINT, reference_fingerprint, sha256_file
+            manifest["schemaVersion"] = 2
+            manifest["provenance"] = {
+                "profile": self.profile,
+                "referenceSha256": sha256_file(reference),
+                "referenceEncoderFingerprint": reference_fingerprint(
+                    self.model_dir, OmegaConf.load(self.cfg_path)),
+                "preprocessFingerprint": PREPROCESS_FINGERPRINT,
+                "producerVersions": {name: version(name) for name in
+                                     ("torch", "torchaudio", "librosa", "transformers")},
+            }
         root = Path(__file__).resolve().parents[2]
         upstream_disclaimer = (root / "DISCLAIMER").read_text(encoding="utf-8")
         derivative = (

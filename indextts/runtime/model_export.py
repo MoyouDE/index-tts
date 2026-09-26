@@ -14,6 +14,7 @@ from omegaconf import OmegaConf
 from safetensors.torch import save_file
 
 from indextts.voicepack.builder import model_fingerprint
+from .profiles import BF16, FP32, PROFILES, BF16_RUNTIME_ABI
 
 
 RUNTIME_ABI = "indextts2.5-reader-runtime-v2"
@@ -58,7 +59,10 @@ def export_runtime_model(
     output_dir: str | Path,
     *,
     cfg_path: str | Path | None = None,
+    profile: str = FP32,
 ) -> dict:
+    if profile not in PROFILES:
+        raise ValueError(f"Unknown profile: {profile}")
     source = Path(source_model_dir).resolve()
     config = Path(cfg_path).resolve() if cfg_path else source / "config.yaml"
     output = Path(output_dir).resolve()
@@ -66,6 +70,13 @@ def export_runtime_model(
         raise FileExistsError(f"输出目录必须为空: {output}")
     output.mkdir(parents=True, exist_ok=True)
     cfg = OmegaConf.load(config)
+    voice_compatibility = None
+    if profile == BF16:
+        from indextts.voicepack.provenance import PREPROCESS_FINGERPRINT, reference_fingerprint
+        voice_compatibility = {
+            "referenceEncoderFingerprint": reference_fingerprint(source, cfg),
+            "preprocessFingerprint": PREPROCESS_FINGERPRINT,
+        }
 
     gpt_source = _load_torch(source / str(cfg.gpt_checkpoint))
     if "model" in gpt_source:
@@ -81,7 +92,7 @@ def export_runtime_model(
         "final_norm.",
     )
     gpt_tensors = {
-        key: value.float() if value.is_floating_point() else value
+        key: value.to(torch.bfloat16 if profile == BF16 else torch.float32) if value.is_floating_point() else value
         for key, value in gpt_source.items()
         if key.startswith(gpt_prefixes)
     }
@@ -143,6 +154,12 @@ def export_runtime_model(
         "files": files,
         "license": "bilibili Model Use License",
     }
+    if profile == BF16:
+        manifest.update(
+            runtimeAbi=BF16_RUNTIME_ABI, profile=profile,
+            precision={**RUNTIME_PRECISION, "gpt": "bfloat16"},
+            voiceCompatibility=voice_compatibility,
+        )
     manifest_path = output / "runtime_model.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -154,13 +171,27 @@ def verify_runtime_model(model_dir: str | Path) -> dict:
     root = Path(model_dir).resolve()
     manifest_path = root / "runtime_model.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("runtimeAbi") != RUNTIME_ABI:
+    if manifest.get("runtimeAbi") not in (RUNTIME_ABI, BF16_RUNTIME_ABI):
         raise ValueError("运行时 ABI 不匹配")
     if manifest.get("capabilities") != RUNTIME_CAPABILITIES:
         raise ValueError("运行时能力声明不匹配")
-    if manifest.get("precision") != RUNTIME_PRECISION:
+    bf16 = manifest["runtimeAbi"] == BF16_RUNTIME_ABI
+    expected_precision = {**RUNTIME_PRECISION, "gpt": "bfloat16"} if bf16 else RUNTIME_PRECISION
+    if manifest.get("precision") != expected_precision:
         raise ValueError("运行时精度声明不匹配，质量优先运行时要求 FP32 GPT 和 IEEE FP32 矩阵计算")
+    if bf16:
+        from indextts.voicepack.provenance import PREPROCESS_FINGERPRINT
+        compatibility = manifest.get("voiceCompatibility", {})
+        fingerprint = compatibility.get("referenceEncoderFingerprint", "")
+        if (manifest.get("profile") != BF16 or len(fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in fingerprint)
+                or compatibility.get("preprocessFingerprint") != PREPROCESS_FINGERPRINT):
+            raise ValueError("Invalid BF16 voice compatibility declaration")
+    if not set(CORE_FILES).issubset(manifest["files"]):
+        raise ValueError("Incomplete core model manifest")
     for name, spec in manifest["files"].items():
+        if Path(name).name != name or name in (".", "..") or ":" in name or "\\" in name:
+            raise ValueError("Unsafe runtime model path")
         path = root / name
         if not path.is_file() or path.stat().st_size != spec["bytes"] or _sha256_file(path) != spec["sha256"]:
             raise ValueError(f"运行时模型文件校验失败: {name}")

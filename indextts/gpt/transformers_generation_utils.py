@@ -2225,7 +2225,7 @@ class GenerationMixin:
 
         elif generation_mode in (GenerationMode.BEAM_SAMPLE, GenerationMode.BEAM_SEARCH):
             # 11. prepare beam search scorer
-            beam_scorer = BeamSearchScorer(
+            beam_scorer = getattr(self, "beam_scorer_factory", BeamSearchScorer)(
                 batch_size=batch_size,
                 num_beams=generation_config.num_beams,
                 device=inputs_tensor.device,

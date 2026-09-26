@@ -1,0 +1,85 @@
+{
+  "files": {
+    "checkpoints/codec.pth": {
+      "bytes": 607290935,
+      "sha256": "d15cbed16a40f478438c961fb043f68dfa6353bf56c966761315db3433e9722c",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/codec.pth"
+    },
+    "checkpoints/config.yaml": {
+      "bytes": 2860,
+      "sha256": "18adf417be3e8f5e2e48e30f7420c719170a6870619436250f360d626877870e",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/config.yaml"
+    },
+    "checkpoints/feat1.pt": {
+      "bytes": 57170,
+      "sha256": "f219cb447d80216ba615666da2ff8d63ac544eee26657f3a7b278692bf7a67c4",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/feat1.pt"
+    },
+    "checkpoints/feat2.pt": {
+      "bytes": 374866,
+      "sha256": "9c4292e96dee535aea9a6206e9a0c856dd578dde9212acdb16dd3ada4d12bf80",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/feat2.pt"
+    },
+    "checkpoints/gpt.pth": {
+      "bytes": 3259599833,
+      "sha256": "43a8f4c30eccdf201958d3b9713511482c19d56dc20b0b1c4ee1e6b080b19d85",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/gpt.pth"
+    },
+    "checkpoints/hf_cache/bigvgan/bigvgan_generator.pt": {
+      "bytes": 449228171,
+      "sha256": "e95ba25972d3de0628d99cd156e9315a9c018899bf739988959ebe3544080ced",
+      "url": "https://huggingface.co/nvidia/bigvgan_v2_22khz_80band_256x/resolve/633ff708ed5b74903e86ff1298cf4a98e921c513/bigvgan_generator.pt"
+    },
+    "checkpoints/hf_cache/bigvgan/config.json": {
+      "bytes": 1405,
+      "sha256": "88a1f47acf747db0b21e97a389d838566147f7a5464583ff5c8d819d870f03ee",
+      "url": "https://huggingface.co/nvidia/bigvgan_v2_22khz_80band_256x/resolve/633ff708ed5b74903e86ff1298cf4a98e921c513/config.json"
+    },
+    "checkpoints/hf_cache/campplus_cn_common.bin": {
+      "bytes": 28036335,
+      "sha256": "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+      "url": "https://huggingface.co/funasr/campplus/resolve/e4b6ede7ce16997aff4ae69fbca1f0175e2afede/campplus_cn_common.bin"
+    },
+    "checkpoints/hf_cache/w2v-bert-2.0/config.json": {
+      "bytes": 1874,
+      "sha256": "f5572bd5998b68182e9c328a43127ed21fed687f6910497136b91a4e3b0e3675",
+      "url": "https://huggingface.co/facebook/w2v-bert-2.0/resolve/da985ba0987f70aaeb84a80f2851cfac8c697a7b/config.json"
+    },
+    "checkpoints/hf_cache/w2v-bert-2.0/model.safetensors": {
+      "bytes": 2322063736,
+      "sha256": "eb890c9660ed6e3414b6812e27257b8ce5454365d5490d3ad581ea60b93be043",
+      "url": "https://huggingface.co/facebook/w2v-bert-2.0/resolve/da985ba0987f70aaeb84a80f2851cfac8c697a7b/model.safetensors"
+    },
+    "checkpoints/hf_cache/w2v-bert-2.0/preprocessor_config.json": {
+      "bytes": 275,
+      "sha256": "8e6281aad64f97e40534135a59dcc5d33571efae376f2a25adf5551951897ab4",
+      "url": "https://huggingface.co/facebook/w2v-bert-2.0/resolve/da985ba0987f70aaeb84a80f2851cfac8c697a7b/preprocessor_config.json"
+    },
+    "checkpoints/multilingual_zh_ja_yue_char_del.tiktoken": {
+      "bytes": 907395,
+      "sha256": "747979631e813193436aabcff7c1c235d37de8097b71c563ec8b63b7a515c718",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/multilingual_zh_ja_yue_char_del.tiktoken"
+    },
+    "checkpoints/s2mel.pth": {
+      "bytes": 414908601,
+      "sha256": "9b1b0003fc189c94cc349758d7ebc25f903b7eb2de4602879959cc64ce816456",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/s2mel.pth"
+    },
+    "checkpoints/wav2vec2bert_stats.pt": {
+      "bytes": 9343,
+      "sha256": "c9c176c2b8850ab2e3ba828bbfa969deaf4566ce55db5f2687b8430b87526ad2",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/wav2vec2bert_stats.pt"
+    },
+    "examples/voice_01.wav": {
+      "bytes": 478050,
+      "sha256": "e33e6ee0107a1dd58e1d66dd90c13df3d55a8683047cc3d7ea206dad84ed3fc8",
+      "url": "https://huggingface.co/spaces/IndexTeam/IndexTTS-2-Demo/resolve/b01840e8e4fd9753743a6d0466cd73ae1d634a68/examples/voice_01.wav"
+    },
+    "examples/voice_02.wav": {
+      "bytes": 574074,
+      "sha256": "8fe2dd1dbd54ef85a073fbc4c8fc0198f8d4523cc3320a600de0e347a3d8b491",
+      "url": "https://huggingface.co/spaces/IndexTeam/IndexTTS-2-Demo/resolve/b01840e8e4fd9753743a6d0466cd73ae1d634a68/examples/voice_02.wav"
+    }
+  },
+  "schemaVersion": 1
+}

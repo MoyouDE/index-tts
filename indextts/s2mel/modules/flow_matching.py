@@ -82,13 +82,20 @@ class BASECFM(torch.nn.Module, ABC):
         x[..., :prompt_len] = 0
         if self.zero_prompt_speech_token:
             mu[..., :prompt_len] = 0
+        hoist = getattr(self, "reader_euler_invariants", False)
+        discard_history = getattr(self, "reader_discard_history", False)
+        if hoist and inference_cfg_rate > 0:
+            stacked_prompt_x = torch.cat([prompt_x, torch.zeros_like(prompt_x)], dim=0)
+            stacked_style = torch.cat([style, torch.zeros_like(style)], dim=0)
+            stacked_mu = torch.cat([mu, torch.zeros_like(mu)], dim=0)
         for step in tqdm(range(1, len(t_span))):
             dt = t_span[step] - t_span[step - 1]
             if inference_cfg_rate > 0:
                 # Stack original and CFG (null) inputs for batched processing
-                stacked_prompt_x = torch.cat([prompt_x, torch.zeros_like(prompt_x)], dim=0)
-                stacked_style = torch.cat([style, torch.zeros_like(style)], dim=0)
-                stacked_mu = torch.cat([mu, torch.zeros_like(mu)], dim=0)
+                if not hoist:
+                    stacked_prompt_x = torch.cat([prompt_x, torch.zeros_like(prompt_x)], dim=0)
+                    stacked_style = torch.cat([style, torch.zeros_like(style)], dim=0)
+                    stacked_mu = torch.cat([mu, torch.zeros_like(mu)], dim=0)
                 stacked_x = torch.cat([x, x], dim=0)
                 stacked_t = torch.cat([t.unsqueeze(0), t.unsqueeze(0)], dim=0)
 
@@ -107,12 +114,13 @@ class BASECFM(torch.nn.Module, ABC):
 
             x = x + dt * dphi_dt
             t = t + dt
-            sol.append(x)
+            if not discard_history:
+                sol.append(x)
             if step < len(t_span) - 1:
                 dt = t_span[step + 1] - t
             x[:, :, :prompt_len] = 0
 
-        return sol[-1]
+        return x if discard_history else sol[-1]
     def forward(self, x1, x_lens, prompt_lens, mu, style):
         """Computes diffusion loss
 

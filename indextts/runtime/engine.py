@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import contextlib
+import random
 import os
 import re
 import threading
@@ -22,6 +24,8 @@ from indextts.gpt.model_v2 import UnifiedVoice
 from indextts.runtime.codec import SemanticCodecDecoder
 from indextts.runtime.emotion import EmotionProvider, normalize_emotion
 from indextts.runtime.model_export import verify_runtime_model
+from indextts.runtime.profiles import BF16, FP32, BF16_RUNTIME_ABI, InferenceOptimizations, generation_options
+from indextts.runtime.platform import performance_cores
 from indextts.runtime.text import apply_pronunciation_annotations, split_text_by_punctuation, split_text_by_tokens
 from indextts.runtime.tokenizer import ReaderTokenizer
 from indextts.utils.speech_text import sanitize_speech_text
@@ -34,6 +38,33 @@ from indextts.voicepack import VoicePackError, load_voicepack
 
 class SynthesisCancelled(RuntimeError):
     pass
+
+
+def validate_seed(seed):
+    if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)
+                             or not 0 <= seed < 2**32):
+        raise ValueError("seed must be an integer in [0, 2**32)")
+
+
+@contextlib.contextmanager
+def seeded_request(seed, device):
+    validate_seed(seed)
+    if seed is None:
+        yield
+        return
+    python_state, numpy_state = random.getstate(), np.random.get_state()
+    index = device.index if device.index is not None else torch.cuda.current_device()
+    try:
+        with torch.random.fork_rng(devices=[index]):
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.random.default_generator.manual_seed(seed)
+            with torch.cuda.device(index):
+                torch.cuda.manual_seed(seed)
+            yield
+    finally:
+        random.setstate(python_state)
+        np.random.set_state(numpy_state)
 
 
 def _write_pcm16(path: Path, pcm: torch.Tensor, sample_rate: int) -> None:
@@ -57,6 +88,9 @@ class ReaderRuntime:
         emotion_provider: EmotionProvider | None,
         device: str = "cuda:0",
         cache_dir: str | Path = "outputs/runtime-cache",
+        *,
+        optimizations: InferenceOptimizations | None = None,
+        prefer_performance_cores: bool = False,
     ) -> None:
         self.model_dir = Path(model_dir).resolve()
         self.voice_dirs = [Path(directory).resolve() for directory in voice_dirs]
@@ -67,15 +101,25 @@ class ReaderRuntime:
         if self.device.type != "cuda" or not torch.cuda.is_available():
             raise RuntimeError("ReaderRuntime v1 需要 NVIDIA CUDA GPU")
         self.manifest = verify_runtime_model(self.model_dir)
+        self.profile = BF16 if self.manifest["runtimeAbi"] == BF16_RUNTIME_ABI else FP32
+        self.optimizations = optimizations if optimizations is not None else InferenceOptimizations()
+        self.prefer_performance_cores = prefer_performance_cores
+        if self.profile == BF16:
+            with torch.cuda.device(self.device):
+                if not torch.cuda.is_bf16_supported():
+                    raise RuntimeError("BF16 CUDA support required; use compatible-fp32 assets on this GPU")
         self.source_fingerprint = self.manifest["sourceModelFingerprint"]
         self.cfg = OmegaConf.load(self.model_dir / "config.yaml")
-        self.dtype = torch.float32
+        self.dtype = torch.bfloat16 if self.profile == BF16 else torch.float32
         torch.set_float32_matmul_precision("highest")
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         self.stop_mel_token = int(self.cfg.gpt.stop_mel_token)
         self._synthesis_lock = threading.Lock()
         self._voices: dict[str, Any] = {}
+        self._voice_lock = threading.Lock()
+        self._active_pack = None
+        self._active_tensors = None
         self._load_models()
         self._load_text_frontend()
         self.reload_voices()
@@ -87,23 +131,36 @@ class ReaderRuntime:
             spk_cond_mode="campplus",
             precomputed_conditioning=True,
         )
+        self.gpt = self.gpt.to(dtype=self.dtype)
         self.gpt.load_state_dict(load_file(self.model_dir / "gpt.safetensors"), strict=True)
-        self.gpt = self.gpt.to(self.device).eval().float()
+        if self.optimizations.shared_gpt_mask:
+            self._share_gpt_masks(self.device)
+        self.gpt = self.gpt.to(self.device).eval()
+        # Module.to independently copies nonpersistent buffers; rebind on CUDA too.
+        if self.optimizations.shared_gpt_mask:
+            self._share_gpt_masks()
         self.gpt.post_init_gpt2_config(use_deepspeed=False, kv_cache=True, half=False)
+        inference = self.gpt.inference_model
+        inference._supports_cache_class = self.optimizations.dynamic_cache
+        inference.reader_incremental_position = self.optimizations.incremental_position
+        if self.optimizations.cpu_beam:
+            from indextts.gpt.cpu_beam import CpuBeamSearchScorer
+            inference.beam_scorer_factory = CpuBeamSearchScorer
 
         self.semantic_codec = SemanticCodecDecoder(**self.cfg.semantic_codec, cfg=self.cfg.semantic_codec)
         self.semantic_codec.load_state_dict(load_file(self.model_dir / "codec.safetensors"), strict=True)
         self.semantic_codec = self.semantic_codec.to(self.device).eval()
 
         self.s2mel = MyModel(self.cfg.s2mel)
-        missing, unexpected = self.s2mel.load_state_dict(
-            load_file(self.model_dir / "s2mel.safetensors"), strict=False
-        )
-        allowed_missing = {"models.cfm.estimator.input_pos"}
-        if set(missing) != allowed_missing or unexpected:
-            raise RuntimeError(
-                f"s2mel 裁剪权重不兼容: missing={missing}, unexpected={unexpected}"
-            )
+        state = load_file(self.model_dir / "s2mel.safetensors")
+        state["models.cfm.estimator.input_pos"] = self.s2mel.models["cfm"].estimator.input_pos
+        self.s2mel.load_state_dict(state, strict=True)
+        del state
+        cfm = self.s2mel.models["cfm"]
+        cfm.reader_euler_invariants = self.optimizations.euler_invariants
+        cfm.reader_discard_history = self.optimizations.discard_euler_history
+        cfm.estimator.reader_compact_mask = self.optimizations.compact_mask
+        cfm.estimator.reader_broadcast = self.optimizations.broadcast
         self.s2mel = self.s2mel.to(self.device).eval()
         self.s2mel.models["cfm"].estimator.setup_caches(max_batch_size=1, max_seq_length=8192)
 
@@ -113,6 +170,17 @@ class ReaderRuntime:
         self.bigvgan = self.bigvgan.to(self.device)
         self.bigvgan.remove_weight_norm()
         self.bigvgan.eval()
+
+    def _share_gpt_masks(self, device=None):
+        masks = [layer.attn for layer in self.gpt.gpt.h]
+        shared = masks[0].bias
+        for attention in masks[1:]:
+            if not torch.equal(shared, attention.bias):
+                raise RuntimeError("GPT attention masks differ; cannot share storage")
+        if device is not None:
+            shared = shared.to(device)
+        for attention in masks:
+            attention.bias = shared
 
     def _load_text_frontend(self) -> None:
         self.tokenizer = ReaderTokenizer(self.model_dir)
@@ -126,12 +194,26 @@ class ReaderRuntime:
                 continue
             for path in sorted(directory.glob("*.ivp")):
                 pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint)
+                if self.profile == BF16:
+                    provenance = pack.manifest.get("provenance", {})
+                    if provenance.get("profile") != BF16 or any(
+                        provenance.get(key) != value
+                        for key, value in self.manifest["voiceCompatibility"].items()
+                    ):
+                        raise VoicePackError(f"BF16 runtime requires a matching BF16-produced pack: {path}")
                 voice_id = pack.voice_id
                 if voice_id in voices:
                     raise VoicePackError(f"发现重复 voiceId: {voice_id}")
                 voices[voice_id] = pack
-        self._voices = voices
+        with self._voice_lock:
+            self._voices = voices
         return self.list_voices()
+
+    def snapshot_voice(self, voice_id):
+        with self._voice_lock:
+            if voice_id not in self._voices:
+                raise KeyError(f"Unknown voice: {voice_id}")
+            return self._voices[voice_id]
 
     def list_voices(self) -> list[dict[str, Any]]:
         return [
@@ -153,6 +235,9 @@ class ReaderRuntime:
             "voiceCount": len(self._voices),
             "runtimeAbi": self.manifest["runtimeAbi"],
             "precision": self.manifest["precision"],
+            "profile": self.profile,
+            "nativeBf16": torch.cuda.get_device_properties(self.device).major >= 8,
+            "optimizations": self.optimizations.to_dict(),
             "capabilities": self.manifest["capabilities"],
             "float32MatmulPrecision": torch.get_float32_matmul_precision(),
             "tf32MatmulEnabled": torch.backends.cuda.matmul.allow_tf32,
@@ -215,14 +300,27 @@ class ReaderRuntime:
             tokens.append(F.pad(tensor, (0, 1), value=1))
         return tokens
 
-    def _voice_condition(self, voice_id: str, vector: Sequence[float] | None):
-        if voice_id not in self._voices:
+    def _voice_condition(self, voice_id: str, vector: Sequence[float] | None, pack=None):
+        if pack is None and voice_id not in self._voices:
             raise KeyError(f"未知音色: {voice_id}")
-        tensors = self._voices[voice_id].tensors
+        pack = pack if pack is not None else self._voices[voice_id]
+        if getattr(self, "optimizations", InferenceOptimizations.baseline()).voice_cache:
+            if self._active_pack is not pack:
+                self._active_tensors = None
+                self._active_pack = None
+                self._active_tensors = {
+                    name: tensor.to(self.device, dtype=self.dtype if name in
+                                    {"speaker_latent", "base_emotion"} else torch.float32)
+                    for name, tensor in pack.tensors.items()
+                }
+                self._active_pack = pack
+            tensors = self._active_tensors
+        else:
+            tensors = pack.tensors
         speaker = tensors["speaker_latent"].to(self.device, dtype=self.dtype)
         base = tensors["base_emotion"].to(self.device, dtype=self.dtype)
-        # The quality profile keeps all voice conditioning math in FP32. Packs
-        # produced by the quality-first builder also persist these tensors as FP32.
+        # Keep the original mixed-precision sum order: BF16 static projections,
+        # FP32 emotion basis/weights. A zero vector is not the calm dimension.
         if vector is None:
             emotion = base
         else:
@@ -247,12 +345,18 @@ class ReaderRuntime:
         duration_factor: float = 1.0,
         *,
         _cancelled: Callable[[], bool] | None = None,
+        seed: int | None = None,
+        _voice_pack=None,
+        _trace: Callable[[str, torch.Tensor], None] | None = None,
     ) -> dict[str, Any]:
         if not isinstance(text, str) or not text.strip():
             raise ValueError("text 不能为空")
         if not 0.5 <= float(duration_factor) <= 2.0:
             raise ValueError("duration_factor 必须位于 [0.5, 2.0]")
-        with self._synthesis_lock:
+        validate_seed(seed)
+        with self._synthesis_lock, seeded_request(seed, self.device), performance_cores(self.prefer_performance_cores), (
+            torch.inference_mode() if self.optimizations.inference_mode else torch.no_grad()
+        ):
             started = time.perf_counter()
             timings: dict[str, float] = {}
             temporary = self.cache_dir / f".{uuid.uuid4().hex}.wav.part"
@@ -265,7 +369,10 @@ class ReaderRuntime:
 
                 stage = time.perf_counter()
                 segments = self._prepare_segments(text)
-                conditional, prompt, ref_mel, style = self._voice_condition(voice_id, vector)
+                pack = _voice_pack if _voice_pack is not None else self.snapshot_voice(voice_id)
+                conditional, prompt, ref_mel, style = self._voice_condition(voice_id, vector, pack)
+                if _trace:
+                    _trace("conditioning", conditional)
                 timings["prepareMs"] = (time.perf_counter() - stage) * 1000
                 wavs = []
                 gpt_seconds = acoustic_seconds = vocoder_seconds = 0.0
@@ -273,17 +380,12 @@ class ReaderRuntime:
                 for index, text_tokens in enumerate(segments):
                     self._cancel_boundary(_cancelled)
                     stage = time.perf_counter()
-                    with torch.no_grad():
+                    with torch.autocast(self.device.type, dtype=torch.bfloat16, enabled=self.profile == BF16):
                         codes = self.gpt.inference_speech_from_conditioning(
                             conditional,
                             text_tokens,
                             language,
-                            do_sample=False,
-                            num_beams=3,
-                            repetition_penalty=10.0,
-                            length_penalty=0.0,
-                            max_generate_length=1500,
-                            num_return_sequences=1,
+                            **generation_options(self.profile),
                         )
                     if not isinstance(codes, torch.Tensor):
                         codes = codes.sequences
@@ -295,6 +397,8 @@ class ReaderRuntime:
                         codes = codes[:, :stop]
                     if codes.shape[1] == 0:
                         raise RuntimeError(f"第 {index + 1} 段未生成有效语义 token")
+                    if _trace:
+                        _trace(f"tokens.{index}", codes)
                     stage = time.perf_counter()
                     with torch.no_grad():
                         semantic = self.semantic_codec.decode(codes)
@@ -318,6 +422,8 @@ class ReaderRuntime:
                         )
                         mel = mel[:, :, ref_mel.size(-1):]
                     acoustic_seconds += time.perf_counter() - stage
+                    if self.optimizations.release_intermediates:
+                        del semantic, target_lengths, condition, combined, codes
                     self._cancel_boundary(_cancelled)
 
                     stage = time.perf_counter()
@@ -325,8 +431,12 @@ class ReaderRuntime:
                         wav = self.bigvgan(mel.float()).squeeze().unsqueeze(0)
                     vocoder_seconds += time.perf_counter() - stage
                     wavs.append(torch.clamp(32767 * wav, -32767.0, 32767.0).cpu())
+                    if self.optimizations.release_intermediates:
+                        del mel, wav
                     self._cancel_boundary(_cancelled)
 
+                waveform_ready = time.perf_counter()
+                speech_duration_ms = sum(wav.shape[-1] for wav in wavs) * 1000 / self.sample_rate
                 silence = torch.zeros(1, int(self.sample_rate * 0.2))
                 parts = []
                 for index, wav in enumerate(wavs):
@@ -334,6 +444,8 @@ class ReaderRuntime:
                     if index + 1 < len(wavs):
                         parts.append(silence)
                 pcm = torch.cat(parts, dim=1)
+                if _trace:
+                    _trace("pcm", pcm.clamp(-32767, 32767).to(torch.int16))
                 output = self.cache_dir / f"tts-{uuid.uuid4().hex}.wav"
                 _write_pcm16(temporary, pcm, self.sample_rate)
                 os.replace(temporary, output)
@@ -344,6 +456,7 @@ class ReaderRuntime:
                         "acousticMs": acoustic_seconds * 1000,
                         "vocoderMs": vocoder_seconds * 1000,
                         "totalMs": (time.perf_counter() - started) * 1000,
+                        "waveformMs": (waveform_ready - started) * 1000,
                     }
                 )
                 return {
@@ -352,9 +465,16 @@ class ReaderRuntime:
                     "durationMs": duration_ms,
                     "emotionMode": emotion_mode,
                     "emotionVector": vector,
+                    "rawEmotion": emotion,
+                    "seed": seed,
+                    "profile": self.profile,
+                    "speechDurationMs": round(speech_duration_ms, 2),
+                    "rtf": (waveform_ready - started) * 1000 / speech_duration_ms,
                     "timings": {key: round(value, 2) for key, value in timings.items()},
                     "warnings": warnings,
                 }
             finally:
+                self.gpt.inference_model.cached_mel_emb = None
+                self.gpt.inference_model._reader_last_position = None
                 if temporary.exists():
                     temporary.unlink()

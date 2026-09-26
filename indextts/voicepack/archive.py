@@ -79,6 +79,8 @@ def tensor_manifest(tensors: Mapping[str, torch.Tensor]) -> dict[str, dict[str, 
         tensor = tensors[name]
         if tensor.layout != torch.strided or tensor.is_sparse:
             raise VoicePackError(f"张量 {name} 必须为稠密 strided tensor")
+        if not torch.isfinite(tensor).all().item():
+            raise VoicePackError(f"Non-finite voice tensor: {name}")
         specs[name] = {
             "shape": list(tensor.shape),
             "dtype": str(tensor.dtype).removeprefix("torch."),

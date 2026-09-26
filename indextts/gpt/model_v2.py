@@ -98,13 +98,16 @@ class GPT2InferenceModel(GPT2PreTrainedModel):
 
     def store_mel_emb(self, mel_emb):
         self.cached_mel_emb = mel_emb
+        self._reader_last_position = None
 
     def prepare_inputs_for_generation(self, input_ids, past_key_values=None, **kwargs):
         token_type_ids = kwargs.get("token_type_ids", None)  # usually None
         if not self.kv_cache:
             past_key_values = None
         # only last token for inputs_ids if past is defined in kwargs
-        if past_key_values:
+        has_past = (past_key_values.get_seq_length() > 0
+                    if hasattr(past_key_values, "get_seq_length") else bool(past_key_values))
+        if has_past:
             input_ids = input_ids[:, -1].unsqueeze(-1)
             if token_type_ids is not None:
                 token_type_ids = token_type_ids[:, -1].unsqueeze(-1)
@@ -114,10 +117,16 @@ class GPT2InferenceModel(GPT2PreTrainedModel):
 
         if attention_mask is not None and position_ids is None:
             # create position_ids on the fly for batch generation
-            position_ids = attention_mask.long().cumsum(-1) - 1
-            position_ids.masked_fill_(attention_mask == 0, 0)
-            if past_key_values:
+            if (getattr(self, "reader_incremental_position", False) and has_past
+                    and self._reader_last_position is not None):
+                position_ids = self._reader_last_position + 1
+            else:
+                position_ids = attention_mask.long().cumsum(-1) - 1
+                position_ids.masked_fill_(attention_mask == 0, 0)
+            if has_past:
                 position_ids = position_ids[:, -1].unsqueeze(-1)
+            if getattr(self, "reader_incremental_position", False):
+                self._reader_last_position = position_ids[:, -1:]
         else:
             position_ids = None
         return {

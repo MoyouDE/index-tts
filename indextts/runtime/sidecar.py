@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import json
 import queue
 import sys
@@ -10,7 +11,7 @@ import threading
 from dataclasses import dataclass
 from typing import IO, Any
 
-from .engine import ReaderRuntime, SynthesisCancelled
+from .engine import ReaderRuntime, SynthesisCancelled, validate_seed
 
 
 @dataclass
@@ -18,6 +19,7 @@ class _Task:
     request_id: str
     params: dict[str, Any]
     cancelled: threading.Event
+    voice_pack: Any
 
 
 class JsonlSidecar:
@@ -72,6 +74,8 @@ class JsonlSidecar:
                         params.get("emotion", "base"),
                         params.get("durationFactor", 1.0),
                         _cancelled=task.cancelled.is_set,
+                        seed=params.get("seed"),
+                        _voice_pack=task.voice_pack,
                     )
                 self._ok(task.request_id, result)
             except SynthesisCancelled as exc:
@@ -86,7 +90,7 @@ class JsonlSidecar:
     def _enqueue_synthesis(self, request_id: str, params: Any) -> None:
         if not isinstance(params, dict):
             raise ValueError("params 必须为对象")
-        allowed = {"text", "voiceId", "emotion", "durationFactor"}
+        allowed = {"text", "voiceId", "emotion", "durationFactor", "seed"}
         unknown = set(params) - allowed
         if unknown:
             raise ValueError(f"synthesize 含不允许的参数: {', '.join(sorted(unknown))}")
@@ -108,7 +112,9 @@ class JsonlSidecar:
                 raise ValueError("emotion 显式向量分量必须位于 [0, 1.2]")
         else:
             raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
-        task = _Task(request_id=request_id, params=params, cancelled=threading.Event())
+        validate_seed(params.get("seed"))
+        task = _Task(request_id=request_id, params=copy.deepcopy(params),
+                     cancelled=threading.Event(), voice_pack=self.runtime.snapshot_voice(params["voiceId"]))
         with self._tasks_lock:
             if request_id in self._tasks:
                 raise ValueError(f"请求 id 正在使用: {request_id}")

@@ -181,6 +181,8 @@ class DiT(torch.nn.Module):
             self.style_in = nn.Linear(args.style_encoder.dim, args.DiT.hidden_dim)
 
     def setup_caches(self, max_batch_size, max_seq_length):
+        if getattr(self, "reader_compact_mask", False) and not self.is_causal:
+            max_seq_length = 8
         self.transformer.setup_caches(max_batch_size, max_seq_length, use_kv_cache=False)
         
     def forward(self, x, prompt_x, x_lens, t, style, cond, mask_content=False):
@@ -218,7 +220,10 @@ class DiT(torch.nn.Module):
         x_in = torch.cat([x, prompt_x, cond], dim=-1) # 80+80+512=672 [2, 1863, 672]
         
         if self.transformer_style_condition and not self.style_as_token: # True and True
-            x_in = torch.cat([x_in, style[:, None, :].repeat(1, T, 1)], dim=-1) #[2, 1863, 864]
+            style_frames = (style[:, None, :].expand(-1, T, -1)
+                            if getattr(self, "reader_broadcast", False)
+                            else style[:, None, :].repeat(1, T, 1))
+            x_in = torch.cat([x_in, style_frames], dim=-1)
             
         if class_dropout: #False
             x_in[..., self.in_channels:] = x_in[..., self.in_channels:] * 0 # 80维后全置为0
@@ -235,7 +240,11 @@ class DiT(torch.nn.Module):
             
         x_mask = sequence_mask(x_lens + self.style_as_token + self.time_as_token, max_length=x_in.size(1)).to(x.device).unsqueeze(1) #torch.Size([1, 1, 1863])True
         input_pos = self.input_pos[:x_in.size(1)]  # (T,) range（0，1863）
-        x_mask_expanded = x_mask[:, None, :].repeat(1, 1, x_in.size(1), 1) if not self.is_causal else None # torch.Size([1, 1, 1863, 1863]
+        x_mask_expanded = None
+        if not self.is_causal:
+            x_mask_expanded = (x_mask[:, None, :].expand(-1, -1, x_in.size(1), -1)
+                               if getattr(self, "reader_broadcast", False)
+                               else x_mask[:, None, :].repeat(1, 1, x_in.size(1), 1))
         x_res = self.transformer(x_in, t1.unsqueeze(1), input_pos, x_mask_expanded) # [2, 1863, 512]
         x_res = x_res[:, 1:] if self.time_as_token else x_res
         x_res = x_res[:, 1:] if self.style_as_token else x_res
