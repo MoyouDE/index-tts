@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import IO, Any
 
 from .engine import ReaderRuntime, SynthesisCancelled, validate_seed
+from .profiles import synthesis_settings
 
 
 @dataclass
@@ -79,6 +80,7 @@ class JsonlSidecar:
                         _cancelled=task.cancelled.is_set,
                         seed=params.get("seed"),
                         _voice_pack=task.voice_pack,
+                        **({"generation_settings": params["generationSettings"]} if "generationSettings" in params else {}),
                     )
                 timings = result.setdefault("timings", {})
                 timings["queueMs"] = round(queue_ms, 2)
@@ -96,7 +98,7 @@ class JsonlSidecar:
     def _enqueue_synthesis(self, request_id: str, params: Any) -> None:
         if not isinstance(params, dict):
             raise ValueError("params 必须为对象")
-        allowed = {"text", "voiceId", "emotion", "durationFactor", "seed"}
+        allowed = {"text", "voiceId", "emotion", "durationFactor", "seed", "generationSettings"}
         unknown = set(params) - allowed
         if unknown:
             raise ValueError(f"synthesize 含不允许的参数: {', '.join(sorted(unknown))}")
@@ -119,6 +121,9 @@ class JsonlSidecar:
         else:
             raise ValueError("emotion 只能是 base、auto 或 8 维显式向量")
         validate_seed(params.get("seed"))
+        if "generationSettings" in params:
+            synthesis_settings(self.runtime.profile, params["generationSettings"],
+                               max_tokens=int(self.runtime.cfg.gpt.max_mel_tokens))
         task = _Task(request_id=request_id, params=copy.deepcopy(params),
                      cancelled=threading.Event(), voice_pack=self.runtime.snapshot_voice(params["voiceId"]),
                      submitted_at=time.perf_counter())
@@ -164,7 +169,12 @@ class JsonlSidecar:
                     elif method == "voices.reload":
                         with contextlib.redirect_stdout(self.stderr):
                             voices = self.runtime.reload_voices()
-                        self._ok(request_id, {"voices": voices})
+                            self._ok(request_id, {"voices": voices})
+                    elif method == "voices.load":
+                        if not isinstance(params, dict) or set(params) != {"path"} or not isinstance(params["path"], str):
+                            raise ValueError("voices.load 需要 path")
+                        with contextlib.redirect_stdout(self.stderr):
+                            self._ok(request_id, self.runtime.load_voice(params["path"]))
                     elif method == "cancel":
                         self._ok(request_id, self._cancel(params))
                     elif method == "shutdown":

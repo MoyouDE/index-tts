@@ -1,0 +1,343 @@
+{
+  "compatible-fp32": {
+    "legacyEqualsExplicitDefaults": true,
+    "acousticChangeAffectsOutput": true,
+    "packSha256": "ec9dccf88bdd50fd8566a32457a50aae708b8ab35d337dd3cd0639f66093a746",
+    "health": {
+      "status": "ready",
+      "device": "cuda:0",
+      "gpu": "NVIDIA GeForce RTX 2060",
+      "voiceCount": 0,
+      "runtimeAbi": "indextts2.5-reader-runtime-v2",
+      "precision": {
+        "bigvgan": "float32",
+        "codec": "float32",
+        "float32Matmul": "ieee",
+        "gpt": "float32",
+        "s2mel": "float32"
+      },
+      "profile": "compatible-fp32",
+      "nativeBf16": false,
+      "optimizations": {
+        "compact_mask": true,
+        "shared_gpt_mask": true,
+        "broadcast": true,
+        "dynamic_cache": true,
+        "cpu_beam": true,
+        "incremental_position": true,
+        "euler_invariants": true,
+        "discard_euler_history": true,
+        "inference_mode": true,
+        "voice_cache": true,
+        "release_intermediates": true
+      },
+      "capabilities": {
+        "automaticEmotionIncluded": false,
+        "emotionModes": [
+          "base",
+          "explicit"
+        ],
+        "languages": [
+          "zh"
+        ],
+        "requiresVoicePack": true,
+        "sampleRate": 22050
+      },
+      "float32MatmulPrecision": "highest",
+      "tf32MatmulEnabled": false,
+      "tf32CudnnEnabled": false,
+      "cudaMemoryAllocatedBytes": 3329406976,
+      "cudaMemoryReservedBytes": 3462397952,
+      "peakCudaMemoryAllocatedBytes": 3366917120,
+      "peakCudaMemoryReservedBytes": 3462397952
+    },
+    "runs": [
+      {
+        "case": "legacy",
+        "wavSha256": "60184d86e157756f68dac491b8e5df626b71c8f39f7911db2d5b595a0c68677b",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1834,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "compatible-fp32",
+          "speechDurationMs": 1834.38,
+          "rtf": 2.7467458437962318,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 67.55,
+            "gptMs": 2423.55,
+            "acousticMs": 2193.15,
+            "vocoderMs": 353.46,
+            "totalMs": 5042.59,
+            "waveformMs": 5038.57,
+            "queueMs": 0.05,
+            "requestTotalMs": 5046.81
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": false,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "acoustic_steps": 25,
+            "cfg": 0.7
+          }
+        }
+      },
+      {
+        "case": "explicit-defaults",
+        "wavSha256": "60184d86e157756f68dac491b8e5df626b71c8f39f7911db2d5b595a0c68677b",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1834,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "compatible-fp32",
+          "speechDurationMs": 1834.38,
+          "rtf": 1.5997585732281592,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 2.3,
+            "gptMs": 1497.22,
+            "acousticMs": 1157.91,
+            "vocoderMs": 214.39,
+            "totalMs": 2936.25,
+            "waveformMs": 2934.56,
+            "queueMs": 0.07,
+            "requestTotalMs": 2937.26
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": false,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "acoustic_steps": 25,
+            "cfg": 0.7
+          }
+        }
+      },
+      {
+        "case": "changed-acoustic",
+        "wavSha256": "352db371c148d25d04413b34c5380d98e7f0f5e9d0369d1c84f55e4f0d68efc1",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1834,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "compatible-fp32",
+          "speechDurationMs": 1834.38,
+          "rtf": 1.278604422713666,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 1.48,
+            "gptMs": 1641.71,
+            "acousticMs": 413.93,
+            "vocoderMs": 235.65,
+            "totalMs": 2347.47,
+            "waveformMs": 2345.44,
+            "queueMs": 0.1,
+            "requestTotalMs": 2348.4
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": false,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "acoustic_steps": 10,
+            "cfg": 0.5
+          }
+        }
+      }
+    ]
+  },
+  "fixed-voice-bf16": {
+    "legacyEqualsExplicitDefaults": true,
+    "acousticChangeAffectsOutput": true,
+    "packSha256": "bc2828c251a876b1435ba22411ef983f46a03cdf4a76bbe2660dc614c91c5463",
+    "health": {
+      "status": "ready",
+      "device": "cuda:0",
+      "gpu": "NVIDIA GeForce RTX 2060",
+      "voiceCount": 0,
+      "runtimeAbi": "indextts2.5-reader-runtime-v3",
+      "precision": {
+        "bigvgan": "float32",
+        "codec": "float32",
+        "float32Matmul": "ieee",
+        "gpt": "bfloat16",
+        "s2mel": "float32"
+      },
+      "profile": "fixed-voice-bf16",
+      "nativeBf16": false,
+      "optimizations": {
+        "compact_mask": true,
+        "shared_gpt_mask": true,
+        "broadcast": true,
+        "dynamic_cache": true,
+        "cpu_beam": true,
+        "incremental_position": true,
+        "euler_invariants": true,
+        "discard_euler_history": true,
+        "inference_mode": true,
+        "voice_cache": true,
+        "release_intermediates": true
+      },
+      "capabilities": {
+        "automaticEmotionIncluded": false,
+        "emotionModes": [
+          "base",
+          "explicit"
+        ],
+        "languages": [
+          "zh"
+        ],
+        "requiresVoicePack": true,
+        "sampleRate": 22050
+      },
+      "float32MatmulPrecision": "highest",
+      "tf32MatmulEnabled": false,
+      "tf32CudnnEnabled": false,
+      "cudaMemoryAllocatedBytes": 2131505664,
+      "cudaMemoryReservedBytes": 2313158656,
+      "peakCudaMemoryAllocatedBytes": 2169884160,
+      "peakCudaMemoryReservedBytes": 2313158656
+    },
+    "runs": [
+      {
+        "case": "legacy",
+        "wavSha256": "de7b019dacdf9252b6e00d12d19c0f5b6faddeb05bccc9e66bea7d63867edfa3",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1916,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "fixed-voice-bf16",
+          "speechDurationMs": 1915.65,
+          "rtf": 3.1185970131390532,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 59.55,
+            "gptMs": 3333.84,
+            "acousticMs": 2212.65,
+            "vocoderMs": 367.25,
+            "totalMs": 5978.11,
+            "waveformMs": 5974.13,
+            "queueMs": 0.05,
+            "requestTotalMs": 5982.31
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": true,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "top_p": 0.8,
+            "top_k": 30,
+            "temperature": 0.8,
+            "acoustic_steps": 25,
+            "cfg": 0.7
+          }
+        }
+      },
+      {
+        "case": "explicit-defaults",
+        "wavSha256": "de7b019dacdf9252b6e00d12d19c0f5b6faddeb05bccc9e66bea7d63867edfa3",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1916,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "fixed-voice-bf16",
+          "speechDurationMs": 1915.65,
+          "rtf": 1.9931147951016792,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 1.51,
+            "gptMs": 2298.33,
+            "acousticMs": 1215.55,
+            "vocoderMs": 235.75,
+            "totalMs": 3820.11,
+            "waveformMs": 3818.1,
+            "queueMs": 0.06,
+            "requestTotalMs": 3820.99
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": true,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "top_p": 0.8,
+            "top_k": 30,
+            "temperature": 0.8,
+            "acoustic_steps": 25,
+            "cfg": 0.7
+          }
+        }
+      },
+      {
+        "case": "changed-acoustic",
+        "wavSha256": "60d2917457da5c194c3cc6ad7d9ea99d9dee339bffc614315e6953e3d45251d1",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 1916,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "fixed-voice-bf16",
+          "speechDurationMs": 1915.65,
+          "rtf": 1.6140524307525084,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 2.16,
+            "gptMs": 2334.16,
+            "acousticMs": 450.56,
+            "vocoderMs": 245.82,
+            "totalMs": 3093.71,
+            "waveformMs": 3091.95,
+            "queueMs": 0.06,
+            "requestTotalMs": 3094.74
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": true,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "top_p": 0.8,
+            "top_k": 30,
+            "temperature": 0.8,
+            "acoustic_steps": 10,
+            "cfg": 0.5
+          }
+        }
+      }
+    ]
+  }
+}

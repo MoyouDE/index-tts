@@ -1,0 +1,60 @@
+{
+  "voiceId": "workbench-test-01",
+  "profile": "fixed-voice-bf16",
+  "packSha256": "bc2828c251a876b1435ba22411ef983f46a03cdf4a76bbe2660dc614c91c5463",
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "runtimeManifestSha256": "f9c7356e66a482ba3af001763223876ceeeb42ca3e30ba78a76ee65f680e3df9",
+  "text": "今天阳光很好。",
+  "emotion": "base",
+  "speed": 1,
+  "seed": 17,
+  "modelLoadMs": 0,
+  "modelReused": true,
+  "device": "cuda:0",
+  "cpuThreads": 4,
+  "allocator": "native",
+  "optimizations": "all",
+  "result": {
+    "sampleRate": 22050,
+    "durationMs": 1916,
+    "emotionMode": "base",
+    "emotionVector": null,
+    "rawEmotion": "base",
+    "seed": 17,
+    "profile": "fixed-voice-bf16",
+    "speechDurationMs": 1915.65,
+    "rtf": 1.771310170098223,
+    "timings": {
+      "emotionMs": 0.0,
+      "prepareMs": 3.06,
+      "gptMs": 2663.13,
+      "acousticMs": 417.36,
+      "vocoderMs": 244.9,
+      "totalMs": 3395.25,
+      "waveformMs": 3393.2,
+      "queueMs": 0.06,
+      "requestTotalMs": 3396.3
+    },
+    "warnings": [],
+    "generationSettings": {
+      "do_sample": true,
+      "num_beams": 3,
+      "repetition_penalty": 10.0,
+      "length_penalty": 0.0,
+      "max_generate_length": 1500,
+      "num_return_sequences": 1,
+      "top_p": 0.8,
+      "top_k": 30,
+      "temperature": 0.8,
+      "acoustic_steps": 10,
+      "cfg": 0.5
+    }
+  },
+  "memory": {
+    "cudaMemoryAllocatedBytes": 2259427840,
+    "cudaMemoryReservedBytes": 3063939072,
+    "peakCudaMemoryAllocatedBytes": 2885799424,
+    "peakCudaMemoryReservedBytes": 3063939072
+  },
+  "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存"
+}

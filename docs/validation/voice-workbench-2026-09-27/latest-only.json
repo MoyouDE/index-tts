@@ -1,0 +1,14 @@
+{
+  "voiceId": "workbench-test-01",
+  "packCount": 2,
+  "previews": {
+    "compatible-fp32-preview": {
+      "wavCount": 1,
+      "reportCount": 1
+    },
+    "fixed-voice-bf16-preview": {
+      "wavCount": 1,
+      "reportCount": 1
+    }
+  }
+}

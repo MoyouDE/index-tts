@@ -24,7 +24,7 @@ from indextts.gpt.model_v2 import UnifiedVoice
 from indextts.runtime.codec import SemanticCodecDecoder
 from indextts.runtime.emotion import EmotionProvider, normalize_emotion
 from indextts.runtime.model_export import verify_runtime_model
-from indextts.runtime.profiles import BF16, FP32, BF16_RUNTIME_ABI, InferenceOptimizations, generation_options
+from indextts.runtime.profiles import BF16, FP32, BF16_RUNTIME_ABI, InferenceOptimizations, synthesis_settings
 from indextts.runtime.platform import performance_cores
 from indextts.runtime.text import apply_pronunciation_annotations, split_text_by_punctuation, split_text_by_tokens
 from indextts.runtime.tokenizer import ReaderTokenizer
@@ -217,6 +217,20 @@ class ReaderRuntime:
                 raise KeyError(f"Unknown voice: {voice_id}")
             return self._voices[voice_id]
 
+    def load_voice(self, path):
+        """Install a checked pack without reloading generation weights."""
+        pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint)
+        provenance = pack.manifest.get("provenance", {})
+        if provenance.get("profile", self.profile) != self.profile:
+            raise VoicePackError("Voice pack precision profile does not match runtime")
+        if self.profile == BF16 and (provenance.get("profile") != BF16 or any(
+            provenance.get(key) != value for key, value in self.manifest["voiceCompatibility"].items()
+        )):
+            raise VoicePackError("BF16 runtime requires a matching BF16-produced pack")
+        with self._voice_lock:
+            self._voices = {pack.voice_id: pack}
+        return {"voiceId": pack.voice_id, "profile": self.profile}
+
     def list_voices(self) -> list[dict[str, Any]]:
         return [
             {
@@ -350,12 +364,15 @@ class ReaderRuntime:
         seed: int | None = None,
         _voice_pack=None,
         _trace: Callable[[str, torch.Tensor], None] | None = None,
+        generation_settings: dict | None = None,
     ) -> dict[str, Any]:
         if not isinstance(text, str) or not text.strip():
             raise ValueError("text 不能为空")
         if not 0.5 <= float(duration_factor) <= 2.0:
             raise ValueError("duration_factor 必须位于 [0.5, 2.0]")
         validate_seed(seed)
+        effective = synthesis_settings(self.profile, generation_settings, max_tokens=int(self.cfg.gpt.max_mel_tokens))
+        generation = {k: v for k, v in effective.items() if k not in {"acoustic_steps", "cfg"}}
         with self._synthesis_lock, seeded_request(seed, self.device), performance_cores(self.prefer_performance_cores), (
             torch.inference_mode() if self.optimizations.inference_mode else torch.no_grad()
         ):
@@ -387,7 +404,7 @@ class ReaderRuntime:
                             conditional,
                             text_tokens,
                             language,
-                            **generation_options(self.profile),
+                            **generation,
                         )
                     if not isinstance(codes, torch.Tensor):
                         codes = codes.sequences
@@ -419,8 +436,8 @@ class ReaderRuntime:
                             ref_mel,
                             style,
                             None,
-                            25,
-                            inference_cfg_rate=0.7,
+                            effective["acoustic_steps"],
+                            inference_cfg_rate=effective["cfg"],
                         )
                         mel = mel[:, :, ref_mel.size(-1):]
                     acoustic_seconds += time.perf_counter() - stage
@@ -474,6 +491,7 @@ class ReaderRuntime:
                     "rtf": (waveform_ready - started) * 1000 / speech_duration_ms,
                     "timings": {key: round(value, 2) for key, value in timings.items()},
                     "warnings": warnings,
+                    "generationSettings": effective,
                 }
             finally:
                 self.gpt.inference_model.cached_mel_emb = None
