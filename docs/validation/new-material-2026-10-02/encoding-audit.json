@@ -1,0 +1,64 @@
+{
+  "excludedR01NotEncoded": true,
+  "trainingAndHeldOutDisjoint": true,
+  "nonIdentityTensorsExactlyFixed": true,
+  "pauseOnlyRemovedRecordedGaps": true,
+  "pauseKeepEqualsPrimary": true,
+  "pauseSeconds": {
+    "keep": 11.18,
+    "short": 8.228027210884354
+  },
+  "checks": [
+    {
+      "case": "baseline",
+      "sixFiniteFp32Tensors": true,
+      "hash": "cb01b5545d3408a8ed8f18e94cdb8e5d5652f6a31eb2100c4e7d7ddcc791c75d",
+      "originalIdentityProjectionVerified": false,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "mean-3",
+      "sixFiniteFp32Tensors": true,
+      "hash": "dffbbe388a8ad82f9b6f2efeb515f913f8d66445f09447c40d4323b8aef125b6",
+      "originalIdentityProjectionVerified": true,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "mean-4",
+      "sixFiniteFp32Tensors": true,
+      "hash": "1ca9125ece42e5c6959b735e5895996ef79d534f3703dbbfe6ba5ce55a7c3de3",
+      "originalIdentityProjectionVerified": true,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "normalized-3",
+      "sixFiniteFp32Tensors": true,
+      "hash": "98512260dc86924d15411cbf0cea82f033a764ec05da1952776b6714203505d2",
+      "originalIdentityProjectionVerified": true,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "normalized-4",
+      "sixFiniteFp32Tensors": true,
+      "hash": "038a5d2d71cf37f511760e282b27e659a49db18f1368e71710fae1c14a82c5ba",
+      "originalIdentityProjectionVerified": true,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "pause-keep",
+      "sixFiniteFp32Tensors": true,
+      "hash": "cb01b5545d3408a8ed8f18e94cdb8e5d5652f6a31eb2100c4e7d7ddcc791c75d",
+      "originalIdentityProjectionVerified": false,
+      "rejectedByFormalLoader": true
+    },
+    {
+      "case": "pause-short",
+      "sixFiniteFp32Tensors": true,
+      "hash": "69987bac82625f14daa8016b1e6d593fcc18baab9a227369835a820da03ed0fc",
+      "originalIdentityProjectionVerified": false,
+      "rejectedByFormalLoader": true
+    }
+  ],
+  "cudaModelConstructedByAudit": false,
+  "formalFusionEnabled": false
+}

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "recipe": {
+    "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+    "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9",
+    "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+    "materialRevision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+    "segments": [
+      {
+        "id": "r02",
+        "start": 231.498,
+        "end": 242.678,
+        "selected": true
+      },
+      {
+        "id": "r03",
+        "start": 251.05,
+        "end": 261.238,
+        "selected": true
+      },
+      {
+        "id": "r04",
+        "start": 354.058,
+        "end": 366.774,
+        "selected": true
+      },
+      {
+        "id": "r05",
+        "start": 461.322,
+        "end": 470.966,
+        "selected": true
+      }
+    ],
+    "heldOut": [
+      {
+        "id": "h01",
+        "start": 15.978,
+        "end": 25.174,
+        "selected": false
+      },
+      {
+        "id": "h02",
+        "start": 541.354,
+        "end": 546.23,
+        "selected": false
+      }
+    ],
+    "primary": "r02",
+    "pauseRange": [
+      231.498,
+      242.678
+    ],
+    "removedGaps": [
+      [
+        26681,
+        37088
+      ],
+      [
+        68311,
+        102709
+      ],
+      [
+        186852,
+        207138
+      ]
+    ],
+    "confirmedTarget": true,
+    "pauseTargetConfirmed": true
+  },
+  "recipeSha256": "e2fca54f13a9546f1dee0a4149db095c4cdcc074fe3f3a91bbb8f759087630e8",
+  "trainingIds": [
+    "r02",
+    "r03",
+    "r04",
+    "r05"
+  ],
+  "heldOutIds": [
+    "h01",
+    "h02"
+  ],
+  "clipSha256": {
+    "h01.wav": "d47c6200413bbe7a1429726070fa810cd51cc3706b5cf2b5096e37d15f2f858c",
+    "h02.wav": "fff1bd4ca2eda3e46582c935c449f463aabf157c436335133df1d4ca76262ba4",
+    "pause-keep.wav": "f1ff97b9026240a8510c5c9712a131e8f78a91f0e4edff60bf64a4a84ca49efb",
+    "pause-short.wav": "b3d8689e3650f05f79944744bf303ad22934102e058d863d44ed7366cc0ff085",
+    "r02.wav": "f1ff97b9026240a8510c5c9712a131e8f78a91f0e4edff60bf64a4a84ca49efb",
+    "r03.wav": "e349aa109839c00f9fa2ffc2a48b20844e06fa43cb311c549af36c750c9501f3",
+    "r04.wav": "43a64b28f2095320ca35e64452e8e48d3b5d1f39cd2c816dde80aa9271a07ac9",
+    "r05.wav": "8f9e33f1c7439a9e4e48c903d50b5f30ce68c67158722db0fb7562838cd174c3"
+  },
+  "sourceModels": "voice-producer/models/checkpoints",
+  "readerModels": "outputs/reader-opt/fp32-rebuilt",
+  "texts": [
+    "今天的天气很好，我们一起去公园散步，顺便聊聊最近发生的事情。",
+    "这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。",
+    "会议安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+    "他停下脚步，想了想，然后轻声说：我们明天再讨论吧。窗外的雨还没有停，但房间里已经安静下来。"
+  ],
+  "seeds": [
+    17,
+    29
+  ],
+  "generationSettings": {
+    "do_sample": false,
+    "num_beams": 3,
+    "repetition_penalty": 10.0,
+    "length_penalty": 0.0,
+    "max_generate_length": 1500,
+    "acoustic_steps": 25,
+    "cfg": 0.7
+  },
+  "cases": [
+    "baseline",
+    "mean-3",
+    "mean-4",
+    "normalized-3",
+    "normalized-4",
+    "pause-keep",
+    "pause-short"
+  ],
+  "precision": "FP32",
+  "encoderDevice": "cpu",
+  "synthesisDevice": "cuda:0",
+  "cpuThreads": 4,
+  "scope": "One source recording; auxiliary CAMPPlus metrics are not subjective quality validation.",
+  "pauseControlStatus": "applicable",
+  "readerManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967"
+}

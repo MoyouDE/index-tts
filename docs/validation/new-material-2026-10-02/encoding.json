@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "seconds": 50.68165020000015,
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+  "fixedAcousticPrompt": true,
+  "artifactFormat": "experimental raw tensors; not IVP",
+  "tensorHashes": {
+    "baseline.safetensors": "cb01b5545d3408a8ed8f18e94cdb8e5d5652f6a31eb2100c4e7d7ddcc791c75d",
+    "mean-3.safetensors": "dffbbe388a8ad82f9b6f2efeb515f913f8d66445f09447c40d4323b8aef125b6",
+    "mean-4.safetensors": "1ca9125ece42e5c6959b735e5895996ef79d534f3703dbbfe6ba5ce55a7c3de3",
+    "normalized-3.safetensors": "98512260dc86924d15411cbf0cea82f033a764ec05da1952776b6714203505d2",
+    "normalized-4.safetensors": "038a5d2d71cf37f511760e282b27e659a49db18f1368e71710fae1c14a82c5ba",
+    "pause-keep.safetensors": "cb01b5545d3408a8ed8f18e94cdb8e5d5652f6a31eb2100c4e7d7ddcc791c75d",
+    "pause-short.safetensors": "69987bac82625f14daa8016b1e6d593fcc18baab9a227369835a820da03ed0fc",
+    "styles.safetensors": "79f74d31c48a231b242c52d2a331e80639d3e69df24409de8fd862d67462c76b"
+  }
+}

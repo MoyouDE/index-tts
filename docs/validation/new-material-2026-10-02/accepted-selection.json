@@ -1,0 +1,88 @@
+{
+  "userFeedback": "R1排除",
+  "interpretation": "Exclude r01; retain other reviewed candidates for this controlled experiment. This is not a claim that the whole source is clean.",
+  "excluded": [
+    "r01"
+  ],
+  "trainingIds": [
+    "r02",
+    "r03",
+    "r04",
+    "r05"
+  ],
+  "heldOutIds": [
+    "h01",
+    "h02"
+  ],
+  "primary": "r02",
+  "pauseRange": [
+    231.498,
+    242.678
+  ],
+  "material": {
+    "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+    "name": "BV1RYEc65EYg.original.m4a",
+    "original": "original.m4a",
+    "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9",
+    "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+    "durationSeconds": 561.1520181405896,
+    "sampleRate": 22050,
+    "segments": [
+      {
+        "id": "h01",
+        "start": 15.978,
+        "end": 25.174,
+        "selected": false
+      },
+      {
+        "id": "r01",
+        "start": 66.186,
+        "end": 79.606,
+        "selected": false
+      },
+      {
+        "id": "r02",
+        "start": 231.498,
+        "end": 242.678,
+        "selected": true
+      },
+      {
+        "id": "r03",
+        "start": 251.05,
+        "end": 261.238,
+        "selected": true
+      },
+      {
+        "id": "r04",
+        "start": 354.058,
+        "end": 366.774,
+        "selected": true
+      },
+      {
+        "id": "r05",
+        "start": 461.322,
+        "end": 470.966,
+        "selected": true
+      },
+      {
+        "id": "h02",
+        "start": 541.354,
+        "end": 546.23,
+        "selected": false
+      }
+    ],
+    "speechSeconds": 175.16800000000038,
+    "settings": {
+      "threshold": 0.5,
+      "minSpeechMs": 250,
+      "minSilenceMs": 500,
+      "padMs": 150,
+      "maxSeconds": 15
+    },
+    "modelSha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004",
+    "primary": "r02",
+    "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9"
+  },
+  "subjectiveFusionVerdict": "pending",
+  "originalVadRecord": "vad-segmentation.json"
+}
