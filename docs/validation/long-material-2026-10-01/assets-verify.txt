@@ -1,0 +1,13 @@
+verified checkpoints/codec.pth
+verified checkpoints/config.yaml
+verified checkpoints/feat1.pt
+verified checkpoints/feat2.pt
+verified checkpoints/gpt.pth
+verified checkpoints/hf_cache/bigvgan/bigvgan_generator.pt
+verified checkpoints/hf_cache/campplus_cn_common.bin
+verified checkpoints/hf_cache/w2v-bert-2.0/config.json
+verified checkpoints/hf_cache/w2v-bert-2.0/model.safetensors
+verified checkpoints/hf_cache/w2v-bert-2.0/preprocessor_config.json
+verified checkpoints/s2mel.pth
+verified checkpoints/wav2vec2bert_stats.pt
+verified vad/silero-v6.0.onnx

@@ -1,0 +1,82 @@
+{
+  "artifactAuditPassed": true,
+  "cases": [
+    {
+      "case": "baseline",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": true,
+      "identityFormulaAndOriginalProjection": false,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "mean-3",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": true,
+      "identityFormulaAndOriginalProjection": true,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "mean-5",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": true,
+      "identityFormulaAndOriginalProjection": true,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "normalized-3",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": true,
+      "identityFormulaAndOriginalProjection": true,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "normalized-5",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": true,
+      "identityFormulaAndOriginalProjection": true,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "pause-keep",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": false,
+      "identityFormulaAndOriginalProjection": false,
+      "rejectedByFormalPackLoader": true
+    },
+    {
+      "case": "pause-short",
+      "validSamples": 8,
+      "rawTensorHashMatches": true,
+      "finiteFp32SixTensorAbi": true,
+      "fixedNonIdentityTensors": false,
+      "identityFormulaAndOriginalProjection": false,
+      "rejectedByFormalPackLoader": true
+    }
+  ],
+  "validSamples": 56,
+  "isolatedStages": 9,
+  "trainingHeldoutDisjoint": true,
+  "allEncodedInputClipsAtMost15Seconds": true,
+  "pauseShorteningPreservesOtherSamplesExactly": true,
+  "bothFormalProfilesMatchSavedBrowserEvidence": true,
+  "experimentalArtifactsRejectedByFormalPackLoader": true,
+  "mainVoiceLibraryHasNoQaEntries": true,
+  "readerModelFilesMatchRecordedManifest": true,
+  "anonymousSamplesAndTimingIndexesMatchOriginals": true,
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "qualityGatePassed": false,
+  "qualityLimit": "User identified BGM in primary reference; overall fusion benefit not confirmed. Technical execution evidence is not clean-reference quality acceptance.",
+  "formalFusionEnabled": false
+}

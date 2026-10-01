@@ -2,6 +2,8 @@
 
 本轮分开交付素材整理、现有单段制包和多段身份融合实验。融合不更新模型参数，不进入正式制包默认流程，不以辅助指标替代用户对本人相似度、清晰度、停顿和稳定性的试听判断。
 
+交付范围与当前证据逐项见 [分层交付核对](completion-audit.md)。[产物复核](artifact-audit.json) 重新读取了实际张量、原始及匿名音频、两档正式包和 reader 模型文件，不只依赖历史成功标记；质量门槛仍明确记录为未通过。
+
 ## 素材工具
 
 独立入口 `python voice-producer/start.py`，或统一入口 `python -m indextts.validation_web --modules producer,audition`。依赖安装及固定资产准备见 [音色工具说明](../../../voice-producer/README.md)。Silero VAD 锁定 [官方 v6.0](https://github.com/snakers4/silero-vad/releases/tag/v6.0)，CPU 按需加载，ONNX SHA-256 为 `597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004`。系统 FFmpeg 优先，否则使用固定 `imageio-ffmpeg==0.6.0` 自带二进制。
