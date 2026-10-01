@@ -1,132 +1,48 @@
-"""Independent local voice-pack and ONNX emotion validation Web UI."""
+"""Local validation entrypoint with independently selectable feature pages."""
 import argparse
+import logging
 import uuid
 from pathlib import Path
+from .web_modules import parse_modules
 
 
-def create_app(*, source_model_dir="checkpoints", emotion_model_dir="", output_dir="outputs/validation-web", workspace_dir="outputs/voice-workbench"):
+def create_app(*, source_model_dir="checkpoints", emotion_model_dir="", output_dir="outputs/validation-web",
+               workspace_dir="outputs/voice-workbench", modules=None, cpu_threads=4):
+    enabled = parse_modules(modules)
+    if not isinstance(cpu_threads, int) or isinstance(cpu_threads, bool) or cpu_threads < 1:
+        raise ValueError("cpu-threads must be positive")
     import gradio as gr
-    import pandas as pd
-    from .validation_service import audio_details
     from .workbench_service import WorkbenchService
-    from .workbench_web import library_controls, audition_controls, choices
-    service = WorkbenchService(output_dir, workspace_dir)
-    labels = ["高兴", "愤怒", "悲伤", "恐惧", "厌恶", "低落", "惊讶", "平静"]
-
-    def preview(path):
-        if not path:
-            return None, {}
-        try:
-            return path, audio_details(path)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
-    def build(reference, vid, name, gender, profile, device, source, session, progress=gr.Progress()):
-        try:
-            return service.build(reference, vid, name, gender, profile, device, source, session, progress)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
-    def inspect(pack, source, session):
-        try:
-            return service.inspect(pack, source, session)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
-    def reset_threshold(model_dir):
-        try:
-            threshold, manifest = service.emotion_default(model_dir)
-            return True, threshold, manifest
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
-    def analyze(*args):
-        try:
-            result, path = service.analyze(*args)
-            plots = [pd.DataFrame({"情感": labels, "分数": result[key]})
-                     for key in ("rawVector", "vector")]
-            summary = (f"总强度 **{result['totalIntensity']:.4f}** · 阈值 **{result['threshold']:.4f}** · "
-                       f"{'使用基础情感（零向量）' if result['baseFallback'] else '保留模型情感向量'}")
-            return summary, *plots, result, path, result["context"]["rendered_text"], result
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
+    service = WorkbenchService(output_dir, workspace_dir, modules=enabled, cpu_threads=cpu_threads)
     with gr.Blocks(title="IndexTTS 模块验证", theme=gr.themes.Soft()) as app:
         session = gr.State(lambda: uuid.uuid4().hex)
-        emotion_result = gr.State(None)
+        bridge = gr.State(None) if {"emotion", "audition"}.issubset(enabled) else None
         gr.Markdown("# IndexTTS 模块验证\n本地音色制包、管理、情感验证与合成试听。工作区保留每种精度的最新包和最近一次试听，不写入交接目录。")
+        pages = {}
         with gr.Tabs() as tabs:
-            with gr.Tab("音色包生成", id="voices"):
-                source = gr.Textbox(label="源模型目录", value=source_model_dir)
-                with gr.Row():
-                    with gr.Column():
-                        reference = gr.File(label="参考音频", file_types=["audio"], type="filepath")
-                        audio = gr.Audio(label="参考音频播放", interactive=False)
-                        info = gr.JSON(label="音频信息（超过 15 秒时仅使用前 15 秒）")
-                    with gr.Column():
-                        vid = gr.Textbox(label="音色 ID", placeholder="例如 reader-voice-01")
-                        name = gr.Textbox(label="音色名称")
-                        gender = gr.Dropdown([("未知", "unknown"), ("女声", "female"), ("男声", "male"), ("中性", "neutral")], value="unknown", label="性别")
-                        profile = gr.Radio([("FP32", "compatible-fp32"), ("BF16 混合精度", "fixed-voice-bf16")], value="compatible-fp32", label="制包精度")
-                        device = gr.Dropdown([("自动", "auto"), ("CPU", "cpu"), ("CUDA 0", "cuda:0")], value="auto", allow_custom_value=True, label="计算设备")
-                        gr.Markdown("BF16 音色包需要匹配的 BF16 推理模型。设备能执行 BF16 不代表一定更快。")
-                        make = gr.Button("生成并校验音色包", variant="primary")
-                        unload = gr.Button("卸载制包模型")
-                        status = gr.Textbox(label="模型状态", interactive=False)
-                output = gr.File(label="下载音色包", interactive=False)
-                with gr.Accordion("生成与校验结果", open=False):
-                    report = gr.JSON(label="制包详情")
-                reference.change(preview, reference, [audio, info])
-                built = make.click(build, [reference, vid, name, gender, profile, device, source, session], [output, report], concurrency_limit=None)
-                unload.click(service.unload_producer, outputs=status, concurrency_id="producer", concurrency_limit=1)
-                library_voice, library_profile = library_controls(service, session, source, device)
-                built.success(lambda v: gr.update(choices=choices(service), value=v), vid, library_voice)
-                with gr.Accordion("检查已有音色包", open=False):
-                    pack = gr.File(label="上传 .ivp", file_types=[".ivp"], type="filepath")
-                    gr.Markdown("使用上方源模型目录检查兼容性；留空目录时仅检查包结构和完整性。")
-                    check = gr.Button("检查音色包")
-                    inspected = gr.JSON(label="包检查结果")
-                    check.click(inspect, [pack, source, session], inspected)
-            with gr.Tab("情感推理", id="emotion"):
-                model_dir = gr.Textbox(label="情感 ONNX 模型目录", value=emotion_model_dir,
-                                       placeholder="包含 emotion.onnx、emotion_model.json 和 tokenizer 文件的目录")
-                mode = gr.Radio(["单句", "上下文"], value="单句", label="输入模式")
-                with gr.Group() as single:
-                    text = gr.Textbox(label="目标文本", lines=3)
-                    kind = gr.Radio([("对白", "dialogue"), ("旁白", "narration")], value="dialogue", label="句子类型")
-                with gr.Group(visible=False) as window:
-                    rows = gr.Dataframe(headers=["句子 ID", "章节", "段落", "类型", "正文"],
-                        datatype=["str", "str", "number", "str", "str"], type="array", col_count=(5, "fixed"),
-                        value=[["s1", "chapter-1", 0, "旁白", "他终于平安回来了。"],
-                               ["s2", "chapter-1", 0, "对白", "太好了，我一直在等你！"]],
-                        label="上下文句子（同一章节、按原文顺序；类型填写对白或旁白）")
-                    target = gr.Textbox(label="目标句 ID", value="s2")
-                mode.change(lambda value: (gr.update(visible=value == "单句"), gr.update(visible=value == "上下文")), mode, [single, window])
-                with gr.Row():
-                    use_default = gr.Checkbox(value=True, label="使用模型默认阈值")
-                    threshold = gr.Slider(0, 1, value=0.355, step=0.001, label="临时阈值（取消默认选项后生效）")
-                    reset = gr.Button("加载模型／恢复默认阈值")
-                with gr.Accordion("模型信息", open=False):
-                    manifest = gr.JSON(label="情感模型 manifest")
-                reset.click(reset_threshold, model_dir, [use_default, threshold, manifest], concurrency_id="emotion")
-                run = gr.Button("分析情感", variant="primary")
-                summary = gr.Markdown()
-                with gr.Row():
-                    with gr.Column(min_width=340):
-                        raw_plot = gr.BarPlot(x="情感", y="分数", y_lim=[0, 1], sort=labels, label="模型原始八维输出")
-                    with gr.Column(min_width=340):
-                        final_plot = gr.BarPlot(x="情感", y="分数", y_lim=[0, 1], sort=labels, label="阈值处理后八维向量")
-                rendered = gr.Textbox(label="实际模型输入", lines=4, interactive=False)
-                download = gr.File(label="下载结果 JSON", interactive=False)
-                with gr.Accordion("详细结果与上下文选择", open=False):
-                    result = gr.JSON(label="推理详情")
-                run.click(analyze, [model_dir, mode, text, kind, rows, target, use_default, threshold, session],
-                          [summary, raw_plot, final_plot, result, download, rendered, emotion_result], concurrency_id="emotion", concurrency_limit=1)
-                release = gr.Button("卸载情感模型")
-                emo_status = gr.Textbox(label="情感模型状态", interactive=False)
-                release.click(service.unload_emotion, outputs=emo_status, concurrency_id="emotion")
-            audition_voice = audition_controls(service, session, emotion_result, tabs, library_voice, library_profile)
-        app.load(lambda: (gr.update(choices=choices(service)), gr.update(choices=choices(service))), outputs=[library_voice, audition_voice])
+            if "producer" in enabled:
+                from .producer_web import build_page
+                pages["producer"] = build_page(service, service.library, session, source_model_dir=source_model_dir)
+            if "emotion" in enabled:
+                from .emotion_web import build_page
+                build_page(service, session, emotion_model_dir=emotion_model_dir, bridge=bridge)
+            if "audition" in enabled:
+                from .audition_web import build_page
+                pages["audition"] = build_page(service, service.library, session, emotion_bridge=bridge,
+                                               producer_enabled="producer" in enabled)
+        if {"producer", "audition"}.issubset(enabled):
+            from .web_common import choices
+            audition, producer = pages["audition"], pages["producer"]
+            audition.missing.click(lambda v, p: (gr.update(selected="voices"),
+                gr.update(choices=choices(service.library), value=v), p),
+                [audition.voice, audition.profile], [tabs, producer.voice, producer.profile])
+        if pages:
+            from .web_common import choices
+            selectors = [page.voice for page in pages.values()]
+            app.load(lambda: tuple(gr.update(choices=choices(service.library)) for _ in selectors)
+                     if len(selectors) > 1 else gr.update(choices=choices(service.library)), outputs=selectors)
+    # Public application owner for explicit shutdown in tests and embedding callers.
+    app.workbench = service
     app.queue(default_concurrency_limit=1)
     return app
 
@@ -140,14 +56,14 @@ def main(argv=None):
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=7861, type=int)
     parser.add_argument("--cpu-threads", default=4, type=int)
+    parser.add_argument("--modules", type=parse_modules, default=parse_modules(), help="逗号分隔: producer,emotion,audition；默认全部")
     args = parser.parse_args(argv)
     if args.cpu_threads < 1:
         parser.error("cpu-threads must be positive")
-    import torch
-    torch.set_num_threads(args.cpu_threads)
-    app = create_app(source_model_dir=args.source_model_dir, emotion_model_dir=args.emotion_model_dir, output_dir=args.output_dir, workspace_dir=args.workspace_dir)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    app = create_app(source_model_dir=args.source_model_dir, emotion_model_dir=args.emotion_model_dir, output_dir=args.output_dir, workspace_dir=args.workspace_dir, modules=args.modules, cpu_threads=args.cpu_threads)
     app.launch(server_name=args.host, server_port=args.port, share=False, show_error=True,
-               max_file_size="100mb", allowed_paths=[str(Path(args.workspace_dir).expanduser().resolve())])
+               max_file_size="100mb", allowed_paths=[str(Path(args.workspace_dir).expanduser().resolve())] if {"producer", "audition"}.intersection(args.modules) else [])
 
 
 if __name__ == "__main__":

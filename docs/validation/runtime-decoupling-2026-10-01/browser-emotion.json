@@ -1,0 +1,71 @@
+{
+  "rawVector": [
+    0.8756679892539978,
+    0.008152349852025509,
+    0.0025863500777632,
+    0.0035163327120244503,
+    0.005354132503271103,
+    0.0026867620181292295,
+    0.013937518931925297,
+    0.012216644361615181
+  ],
+  "totalIntensity": 0.8781000375747681,
+  "threshold": 0.355,
+  "baseFallback": false,
+  "vector": [
+    0.8756679892539978,
+    0.008152349852025509,
+    0.0025863500777632,
+    0.0035163327120244503,
+    0.005354132503271103,
+    0.0026867620181292295,
+    0.013937518931925297,
+    0.012216644361615181
+  ],
+  "context": {
+    "selected_positions": [
+      0
+    ],
+    "selected_sentence_ids": [
+      "target"
+    ],
+    "rendered_text": "[TGT][对白]太好了！我终于成功了，真的好开心！[/TGT]",
+    "input_token_count": 22,
+    "target_token_count": 22,
+    "previous_sentence_count": 0,
+    "next_sentence_included": false,
+    "context_limited": false,
+    "target_truncated": false,
+    "stop_reason": "section-start"
+  },
+  "timings": {
+    "inferenceMs": 38.52569999799016,
+    "totalMs": 39.927599998918595
+  },
+  "labels": [
+    "happy",
+    "angry",
+    "sad",
+    "afraid",
+    "disgusted",
+    "melancholic",
+    "surprised",
+    "calm"
+  ],
+  "modelVersion": "20260919-deepseek-v3-41763-balanced-v1",
+  "sourceCheckpointSha256": "98876ac84242504012c2124dc414723e4406cceac1c61ac710933b18053500b1",
+  "modelFileSha256": "d735aa76e3729466220f7face64cee6c50e8a7ee7d8275c50f2e271b0ae737b6",
+  "modelThreshold": 0.355,
+  "input": {
+    "sentences": [
+      {
+        "sentenceId": "target",
+        "sectionId": "single",
+        "lineIndex": 0,
+        "sentenceType": "dialogue",
+        "text": "太好了！我终于成功了，真的好开心！"
+      }
+    ],
+    "targetSentenceId": "target"
+  }
+}

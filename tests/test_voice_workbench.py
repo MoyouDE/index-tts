@@ -122,7 +122,7 @@ def test_runtime_load_rejects_mixed_precision_and_snapshots_keep_old_pack(tmp_pa
 
 
 def test_audition_snapshots_parameters_saves_latest_and_recovers_worker_failure(tmp_path, monkeypatch):
-    import indextts.workbench_service as module
+    import indextts.audition_service as module
     source = pack(tmp_path/"voice.ivp")
     service = WorkbenchService(tmp_path/"out", tmp_path/"work")
     service.library.install(source)
@@ -174,7 +174,7 @@ def test_gradio_builds_all_three_tabs_without_model_loading(tmp_path):
 
 
 def test_queued_cancel_does_not_start_worker(tmp_path, monkeypatch):
-    import indextts.workbench_service as module
+    import indextts.audition_service as module
     source = pack(tmp_path/"voice.ivp")
     service = WorkbenchService(tmp_path/"out", tmp_path/"work")
     service.library.install(source)
@@ -190,18 +190,19 @@ def test_queued_cancel_does_not_start_worker(tmp_path, monkeypatch):
             service.audition(vid, FP32, str(model), "cuda:0", "text", "base", 1, 17, {}, "all", 4, "native", session)
         except Exception as exc:
             errors.append(str(exc))
-    with service._gpu_lock:
+    audition = service.audition_service
+    with service.gpu.use("audition"):
         thread = threading.Thread(target=run)
         thread.start()
         import time
         until = time.monotonic() + 3
-        while session not in service._tasks and time.monotonic() < until:
+        while not audition.has_task(session) and time.monotonic() < until:
             time.sleep(.01)
-        assert session in service._tasks
+        assert audition.has_task(session)
         assert "请求取消" in service.cancel(session)
     thread.join(timeout=3)
     assert not thread.is_alive() and errors == ["试听已取消"]
-    assert not service._tasks
+    assert not audition.has_task(session)
     service.close()
 
 
@@ -212,7 +213,7 @@ def test_missing_cuda_is_explicit_and_does_not_load_model(tmp_path, monkeypatch)
 
 
 def test_mismatched_model_and_bad_manual_vector_fail_without_loading(tmp_path, monkeypatch):
-    import indextts.workbench_service as module
+    import indextts.audition_service as module
     source = pack(tmp_path/"voice.ivp")
     service = WorkbenchService(tmp_path/"out", tmp_path/"work")
     service.library.install(source)
@@ -227,5 +228,5 @@ def test_mismatched_model_and_bad_manual_vector_fail_without_loading(tmp_path, m
     args[5] = [float("nan")]*8
     with pytest.raises(ValueError, match="情感向量"):
         service.audition(*args)
-    assert not service._tasks
+    assert not service.audition_service.has_task(args[-1])
     service.close()

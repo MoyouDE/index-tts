@@ -17,6 +17,30 @@ uv sync --locked --extra validation-web --extra test
 
 默认仅监听 `127.0.0.1`，不开启分享。情感模型仍通过 `--emotion-model-dir` 或情感页指定，缺少情感模型不影响基础情感试听。Linux 将解释器路径改为 `.venv/bin/python`。
 
+### 按功能启动
+
+不传 `--modules` 时保留三个页签。参数接受逗号分隔的 `producer`（制包及音色管理）、`emotion`（情感验证）、`audition`（合成试听），页签始终按此顺序显示；空列表、未知名称和重复名称会报错。
+
+```powershell
+.venv/Scripts/python.exe -m indextts.validation_web --modules producer
+.venv/Scripts/python.exe -m indextts.validation_web --modules emotion --emotion-model-dir D:/Models/emotion-onnx
+.venv/Scripts/python.exe -m indextts.validation_web --modules audition
+.venv/Scripts/python.exe -m indextts.validation_web --modules producer,audition
+.venv/Scripts/python.exe -m indextts.validation_web --modules emotion,audition --emotion-model-dir D:/Models/emotion-onnx
+```
+
+每次选择一种模式启动服务；切换模式需重启。纯情感模式不创建或读取音色工作区，不导入制包、音色包校验和试听服务。首次分析仍使用原 ONNX provider 和 Transformers tokenizer，tokenizer 会引入 PyTorch；本轮保持原安装环境和 tokenizer 行为。
+
+只启用试听时，缺失精度会给出制包启动指引；未启用情感时不显示“采用情感页结果”。同时启用对应功能时保留跨页导航和会话向量传递。关闭其他模块不要求其模型目录有效，模型在执行操作时才加载。
+
+### 模块边界
+
+制包、情感、试听服务分别管理自己的模型和卸载；制包只产出包，试听只接收包快照并产出 WAV/报告。音色库保存成果及本机设置；应用层负责快照、安装和最近成果替换。GPU 协调器通过公开卸载方法串行切换制包与试听，情感分析独立运行。
+
+`ValidationService`、`WorkbenchService` 的原公开调用保持兼容，改为组合委托；`create_app` 新增可选 `modules`、`cpu_threads` 参数。嵌入调用者可使用返回应用的 `app.workbench.close()` 释放模型。页面间连接由入口组装，情感桥接只保存本会话向量副本，不从试听页调用情感服务。模型及 GPU 切换日志写入服务日志，JSONL 协议保持原样。
+
+启动测量与本轮验证见 [第一轮解耦记录](validation/runtime-decoupling-2026-10-01/README.md)。
+
 本地音色库默认为 `outputs/voice-workbench/`，已由子模块的 `/outputs/` 规则忽略。自定义工作区应选择本机数据目录，不放在需要提交的源码目录中。`--output-dir` 继续控制临时会话及情感 JSON 输出，与持久音色库不同。
 
 工作区中 `voices/<voiceId>/voice.json` 保存音色身份、备注和参考音频信息；该目录保留原始参考音频，以及 FP32/BF16 各一份 `.ivp`。每个精度的 preview 目录只保留最近成功的 WAV、报告和 `latest.json` 指针。`settings.json` 保存本机模型目录及设备偏好，`runtime/` 保存试听进程日志，`.jobs/` 保存请求期间的快照。模型、原始音频、合成音频、上传缓存和本机设置均不提交 Git。

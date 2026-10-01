@@ -128,7 +128,7 @@ def test_onnx_model_invalid_manifest_raises(tmp_path):
 
 
 def test_producer_failure_can_recover_and_switch_releases(tmp_path, monkeypatch):
-    import indextts.validation_service as module
+    import indextts.voicepack.builder as module
     from test_voicepack import _manifest, _tensors, _licenses
     from indextts.voicepack.archive import write_voicepack
     roots = tmp_path / "models"
@@ -179,4 +179,6 @@ def test_invalid_directories_and_corrupt_pack_do_not_poison_service(tmp_path):
         service.inspect(broken, "", session)
     valid = write_voicepack(tmp_path / "good.ivp", _manifest(), _tensors(), _licenses())
     assert service.inspect(valid, "", session)["ok"]
-    assert service._producer is service._emotion is None
+    # Invalid requests remain recoverable through the public compatibility API.
+    assert service.unload_producer() == "制包模型已卸载"
+    assert service.unload_emotion() == "情感模型已卸载"

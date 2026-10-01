@@ -1,0 +1,29 @@
+[
+  {
+    "modules": "producer,emotion,audition",
+    "constructionSeconds": 15.8,
+    "rssBytes": 577253376,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": true,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": false,
+      "indextts.emotion_web": false,
+      "indextts.audition_web": false
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "音色包生成",
+      "情感推理",
+      "合成试听"
+    ]
+  }
+]

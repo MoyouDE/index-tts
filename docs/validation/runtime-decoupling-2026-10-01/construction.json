@@ -1,0 +1,156 @@
+[
+  {
+    "modules": "producer,emotion,audition",
+    "constructionSeconds": 14.547,
+    "rssBytes": 574103552,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": true,
+      "indextts.emotion_web": true,
+      "indextts.audition_web": true
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "音色包生成",
+      "情感推理",
+      "合成试听"
+    ]
+  },
+  {
+    "modules": "producer",
+    "constructionSeconds": 12.479,
+    "rssBytes": 552628224,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": true,
+      "indextts.emotion_web": false,
+      "indextts.audition_web": false
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "音色包生成"
+    ]
+  },
+  {
+    "modules": "emotion",
+    "constructionSeconds": 9.417,
+    "rssBytes": 192233472,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": false,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": false,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": false,
+      "indextts.emotion_web": true,
+      "indextts.audition_web": false
+    },
+    "workspaceCreated": false,
+    "tabs": [
+      "情感推理"
+    ]
+  },
+  {
+    "modules": "audition",
+    "constructionSeconds": 12.457,
+    "rssBytes": 552423424,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": false,
+      "indextts.emotion_web": false,
+      "indextts.audition_web": true
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "合成试听"
+    ]
+  },
+  {
+    "modules": "producer,audition",
+    "constructionSeconds": 11.75,
+    "rssBytes": 553971712,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": true,
+      "indextts.emotion_web": false,
+      "indextts.audition_web": true
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "音色包生成",
+      "合成试听"
+    ]
+  },
+  {
+    "modules": "emotion,audition",
+    "constructionSeconds": 14.077,
+    "rssBytes": 572248064,
+    "rssScope": "当前 Python 进程工作集；不含子进程，不是显存",
+    "loadedModules": {
+      "torch": true,
+      "transformers": false,
+      "onnxruntime": false,
+      "indextts.voicepack.builder": false,
+      "indextts.voicepack.archive": true,
+      "indextts.voicepack.reference": false,
+      "indextts.runtime.engine": false,
+      "indextts.producer_service": false,
+      "indextts.emotion_service": false,
+      "indextts.audition_service": false,
+      "indextts.producer_web": false,
+      "indextts.emotion_web": true,
+      "indextts.audition_web": true
+    },
+    "workspaceCreated": true,
+    "tabs": [
+      "情感推理",
+      "合成试听"
+    ]
+  }
+]
