@@ -17,6 +17,7 @@ class WorkbenchService:
         self.output_dir = self.validation.output_dir
         self.gpu = GpuCoordinator()
         self._audition_service = None
+        self._materials = None
         self._service_lock = threading.Lock()
         if "producer" in self.modules or "audition" in self.modules:
             from .voice_workspace import VoiceWorkspace
@@ -45,9 +46,20 @@ class WorkbenchService:
     def session_dir(self, session_id):
         return self.validation.session_dir(session_id)
 
+    @property
+    def materials(self):
+        self.require("producer")
+        with self._service_lock:
+            if self._materials is None:
+                from .material_service import MaterialService
+                self._materials = MaterialService(self.library.root)
+            return self._materials
+
     def close(self):
         self.gpu.close()
         self.validation.unload_emotion()
+        if self._materials is not None:
+            self._materials.close()
 
     def _release_audition(self):
         if self._audition_service is not None:
@@ -76,7 +88,7 @@ class WorkbenchService:
         self.require("emotion")
         return self.validation.analyze(model_dir, mode, text, kind, rows, target, use_default, threshold, session_id)
 
-    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None):
+    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None, reference_selection=None):
         self.require("producer")
         if instance is None and (self.library.directory(voice_id) / "voice.json").exists():
             raise ValueError("音色 ID 已存在，请选择库中音色生成；更换参考音频请使用新 ID")
@@ -85,7 +97,11 @@ class WorkbenchService:
             try:
                 path, report = self.validation.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress)
                 copied_reference = next(Path(path).parent.glob("reference.*"))
-                installed = self.library.install(path, reference=copied_reference, expected_instance=instance)
+                installed = self.library.install(path, reference=copied_reference, expected_instance=instance,
+                                                 reference_selection=reference_selection)
+                if reference_selection is not None:
+                    report["referenceSelection"] = copy.deepcopy(reference_selection)
+                    report["conditioningMethod"] = "primary-only-v1"
                 return installed, report
             finally:
                 if path:
@@ -108,7 +124,25 @@ class WorkbenchService:
                 shutil.copyfile(source, reference)
                 record = copy.deepcopy(record)
             return self.build(reference, voice_id, record["displayName"], record["gender"], profile,
-                              device, model_dir, session_id, progress, instance=record["instance"])
+                              device, model_dir, session_id, progress, instance=record["instance"],
+                              reference_selection=record.get("referenceSelection"))
+
+    def build_selection(self, selection, voice_id, name, gender, profile, device, model_dir, session_id, progress=None):
+        self.require("producer")
+        from .voicepack.provenance import sha256_file
+        fixed = self.materials.selection(selection["sourceId"], selection["revision"],
+                                        confirmed=selection.get("confirmedTarget") is True)
+        if fixed != selection:
+            raise ValueError("参考选择快照与保存记录不一致")
+        audio = self.materials.directory(fixed["sourceId"])/"audio.wav"
+        if sha256_file(audio) != fixed["audioSha256"]:
+            raise ValueError("素材音轨完整性检查失败")
+        with tempfile.TemporaryDirectory(dir=self._jobs) as job:
+            primary = next(s for s in fixed["segments"] if s["id"] == fixed["primary"])
+            reference = self.materials.crop(fixed["sourceId"], primary["start"], primary["end"], Path(job)/"primary.wav")
+            fixed["primarySha256"] = sha256_file(reference)
+            return self.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress,
+                              reference_selection=fixed)
 
     def cancel(self, session_id):
         if self._audition_service is None:

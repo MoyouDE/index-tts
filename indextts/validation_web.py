@@ -47,6 +47,9 @@ def create_app(*, source_model_dir=DEFAULT_SOURCE_MODEL_DIR, emotion_model_dir="
             selectors = [page.voice for page in pages.values()]
             app.load(lambda: tuple(gr.update(choices=choices(service.library)) for _ in selectors)
                      if len(selectors) > 1 else gr.update(choices=choices(service.library)), outputs=selectors)
+        if "producer" in pages:
+            material_page=pages["producer"].materials
+            app.load(lambda:gr.update(choices=material_page.choices(),value=None),outputs=material_page.source)
     # Public application owner for explicit shutdown in tests and embedding callers.
     app.workbench = service
     app.queue(default_concurrency_limit=1)
@@ -70,7 +73,7 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     app = create_app(source_model_dir=args.source_model_dir, emotion_model_dir=args.emotion_model_dir, output_dir=args.output_dir, workspace_dir=args.workspace_dir, modules=args.modules, cpu_threads=args.cpu_threads)
     app.launch(server_name=args.host, server_port=args.port, share=False, show_error=True,
-               max_file_size="100mb", allowed_paths=[str(Path(args.workspace_dir).expanduser().resolve())] if {"producer", "audition"}.intersection(args.modules) else [])
+               max_file_size="2gb", allowed_paths=[str(Path(args.workspace_dir).expanduser().resolve())] if {"producer", "audition"}.intersection(args.modules) else [])
 
 
 if __name__ == "__main__":

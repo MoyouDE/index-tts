@@ -66,7 +66,7 @@ class VoiceWorkspace:
             raise ValueError("未知精度")
         return self.directory(voice_id) / (profile + ".ivp")
 
-    def install(self, pack_path, *, reference=None, expected_instance=None):
+    def install(self, pack_path, *, reference=None, expected_instance=None, reference_selection=None):
         pack = load_voicepack(pack_path)
         profile = pack.manifest.get("provenance", {}).get("profile")
         if profile is None:
@@ -85,6 +85,8 @@ class VoiceWorkspace:
                 provenance = pack.manifest.get("provenance", {})
                 if provenance.get("referenceSha256") != record.get("referenceSha256"):
                     raise ValueError("参考音频发生变化，请使用新的音色 ID")
+                if reference_selection != record.get("referenceSelection"):
+                    raise ValueError("参考选择发生变化，请使用新的音色 ID")
             elif expected_instance is not None:
                 raise ValueError("音色已删除，任务结果不会重新创建该条目")
             else:
@@ -103,6 +105,10 @@ class VoiceWorkspace:
                         record.update(reference=ref_name, referenceSha256=sha256_file(staging / ref_name))
                         if pack.manifest.get("provenance", {}).get("referenceSha256") != record["referenceSha256"]:
                             raise ValueError("参考音频哈希与制包结果不匹配")
+                    if reference_selection is not None:
+                        if reference_selection.get("method") != "primary-only-v1" or reference_selection.get("primarySha256") != record["referenceSha256"]:
+                            raise ValueError("参考选择与主参考音频不匹配")
+                        record["referenceSelection"] = reference_selection
                     atomic_json(staging / "voice.json", record)
                     # New entries are made visible together, never as half-created records.
                     os.rename(staging, directory)

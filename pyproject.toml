@@ -75,6 +75,7 @@ webui = [
 validation-web = [
   "gradio==5.45.0",
   "onnxruntime==1.23.2",
+  "imageio-ffmpeg==0.6.0",
 ]
 # To install the DeepSpeed support, use `uv sync --extra deepspeed` (or `--all-extras`).
 deepspeed = [

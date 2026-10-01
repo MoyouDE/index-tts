@@ -30,9 +30,13 @@ def build_page(service, library, session, *, source_model_dir):
         except Exception as exc:
             raise gr.Error(str(exc)) from exc
 
+    def build_from_selection(selection, vid, name, gender, profile, device, sid, progress=None):
+        return service.build_selection(selection,vid,name,gender,profile,device,source_model_dir,sid,progress)
+
     with gr.Tab("音色包生成", id="voices"):
         gr.Textbox(label="源模型目录", value=source_model_dir, interactive=False,
                    info="制包使用的源模型权重，固定于工具启动配置；音色包保存在下方本地工作区。")
+        gr.Markdown("短参考音频可直接制包；视频或长录音请使用下方“长视频／录音素材整理”，选择并检查主参考。")
         with gr.Row():
             with gr.Column():
                 reference = gr.File(label="参考音频", file_types=["audio"], type="filepath")
@@ -51,15 +55,19 @@ def build_page(service, library, session, *, source_model_dir):
         output = gr.File(label="下载音色包", interactive=False)
         with gr.Accordion("生成与校验结果", open=False):
             report = gr.JSON(label="制包详情")
+        from .material_web import build_controls
+        material_page=build_controls(service.materials,session,generate=build_from_selection,
+            session_directory=service.session_dir,inputs=[vid,name,gender,profile,device,session],outputs=[output,report])
         reference.change(preview, reference, [audio, info])
         built = make.click(build, [reference, vid, name, gender, profile, device, session], [output, report], concurrency_limit=None)
         unload.click(service.unload_producer, outputs=status, concurrency_id="producer", concurrency_limit=1)
         library_voice, library_profile = library_controls(library, service.rebuild, session, source_model_dir, device)
         built.success(lambda v: gr.update(choices=choices(library), value=v), vid, library_voice)
+        material_page.built.success(lambda v: gr.update(choices=choices(library),value=v),vid,library_voice)
         with gr.Accordion("检查已有音色包", open=False):
             pack = gr.File(label="上传 .ivp", file_types=[".ivp"], type="filepath")
             gr.Markdown("检查包结构、完整性以及与工具固定源模型的兼容性。")
             check = gr.Button("检查音色包")
             inspected = gr.JSON(label="包检查结果")
             check.click(inspect, [pack, session], inspected)
-    return SimpleNamespace(voice=library_voice, profile=library_profile)
+    return SimpleNamespace(voice=library_voice, profile=library_profile,materials=material_page)

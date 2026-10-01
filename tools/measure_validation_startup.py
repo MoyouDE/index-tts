@@ -1,6 +1,7 @@
 """Measure feature-page construction in a fresh process, without model loading."""
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import socket
@@ -15,9 +16,12 @@ WATCHED = ("torch", "transformers", "onnxruntime", "indextts.voicepack.builder",
            "indextts.voicepack.archive", "indextts.voicepack.reference", "indextts.runtime.engine",
            "indextts.producer_service", "indextts.emotion_service", "indextts.audition_service",
            "indextts.producer_web", "indextts.emotion_web", "indextts.audition_web")
+WATCHED += ("indextts.material_web", "indextts.material_service", "indextts.material_vad")
 
 
 def measure(mode, baseline=False, serve=False):
+    # Measure local construction, excluding optional network analytics.
+    os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
     import psutil
     started = time.perf_counter()
     with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,97 @@
+{
+  "results": [
+    {
+      "case": "bad-media",
+      "rejected": true,
+      "error": "FFmpeg 提取失败：[mov,mp4,m4a,3gp,3g2,mj2 @ 000001e85d1e4100] moov atom not found\n[in#0 @ 000001e85d1e3d00] Error opening input: Invalid data found when processing input\nError opening input file D:\\Workspaces\\Readest\\index-tts\\outputs\\material-real-io\\work\\materials\\.import-3f9f90901bb44362be822aca3ed77368\\original.mp4.\nError opening input files: Invalid data found when processing input\n"
+    },
+    {
+      "case": "stereo-44100",
+      "seconds": 0.9412183999957051,
+      "summary": {
+        "sourceId": "5ad67cf6b0f048febdbe3881dc3a70f7",
+        "name": "stereo-44100.wav",
+        "original": "original.wav",
+        "sourceSha256": "698d4379c685c8a60b92f329a22429c6c06716dddf5f0f9f26718bdffa1d7daf",
+        "audioSha256": "dc240271f2d3f09be37487c82fc86d626609b5b0bb7a7b2b0be5a1efc779b9b9",
+        "durationSeconds": 12.854013605442177,
+        "sampleRate": 22050,
+        "segments": [
+          {
+            "id": "s001",
+            "start": 0,
+            "end": 12.694,
+            "selected": true
+          }
+        ],
+        "speechIntervals": [
+          [
+            0.064,
+            12.544
+          ]
+        ],
+        "speechSeconds": 12.48,
+        "settings": {
+          "threshold": 0.5,
+          "minSpeechMs": 250,
+          "minSilenceMs": 500,
+          "padMs": 150,
+          "maxSeconds": 15
+        },
+        "modelSha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004",
+        "primary": "s001",
+        "revision": "8a6882d144a881cb3966341690d4099666756a706b2a3d57931528424a88269b"
+      },
+      "decodedRate": 22050,
+      "decodedChannels": 1
+    },
+    {
+      "case": "video",
+      "summary": {
+        "sourceId": "bfb2c0c7150f48afaf3f7f5c90651da1",
+        "name": "reference.mp4",
+        "original": "original.mp4",
+        "sourceSha256": "c5407d8c8deed468429da4aabc54cb48375d32bcbc59332ec0851f3a337ba8a8",
+        "audioSha256": "68ad5ba3fb6d493fbb8d423d721514a272547bc2dc37f2dd74541842b4ed0ac5",
+        "durationSeconds": 12.863854875283447,
+        "sampleRate": 22050,
+        "segments": [
+          {
+            "id": "s001",
+            "start": 0,
+            "end": 12.726,
+            "selected": true
+          }
+        ],
+        "speechIntervals": [
+          [
+            0.064,
+            12.576
+          ]
+        ],
+        "speechSeconds": 12.512,
+        "settings": {
+          "threshold": 0.5,
+          "minSpeechMs": 250,
+          "minSilenceMs": 500,
+          "padMs": 150,
+          "maxSeconds": 15
+        },
+        "modelSha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004",
+        "primary": "s001",
+        "revision": "acfaf2572bf8d3d3bb96c97fd31609ad98c9781e3e3dfe8183523dfe4304a9b8"
+      }
+    },
+    {
+      "case": "silence",
+      "rejectedForEncoding": true
+    },
+    {
+      "case": "bad-vad",
+      "rejected": true,
+      "error": "VAD 权重校验失败"
+    }
+  ],
+  "torchImported": false,
+  "producerImported": false
+}

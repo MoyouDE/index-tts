@@ -26,6 +26,19 @@ def test_selection_uses_fixed_page_order():
     assert parse_modules() == ("producer", "emotion", "audition")
 
 
+def test_saved_material_is_not_implicitly_selected_on_page_construction(tmp_path):
+    from indextts.material_service import MaterialService,write_json
+    sid=uuid.uuid4().hex
+    directory=MaterialService(tmp_path/"work").directory(sid);directory.mkdir()
+    write_json(directory/"material.json",{"sourceId":sid,"name":"reference.mp4"})
+    app=create_app(modules="producer",workspace_dir=tmp_path/"work",output_dir=tmp_path/"out")
+    try:
+        dropdown=next(c for c in app.config["components"] if c["props"].get("label")=="已保存素材")
+        assert dropdown["props"].get("value") is None
+        assert dropdown["props"]["choices"]==[(f"reference.mp4 · {sid[:8]}",sid)]
+    finally:app.workbench.close()
+
+
 @pytest.mark.parametrize("custom_directory", [False, True])
 def test_producer_directory_is_fixed_on_server(tmp_path, monkeypatch, custom_directory):
     from indextts.workbench_service import WorkbenchService
@@ -78,9 +91,10 @@ def test_producer_asset_lock_reuses_existing_hashes_without_unrelated_assets():
     original = json.loads((ROOT / "tests/fixtures/reader-assets.lock.json").read_text(encoding="utf-8"))
     expected = set(original["files"]) - {"examples/voice_01.wav", "examples/voice_02.wav",
         "checkpoints/multilingual_zh_ja_yue_char_del.tiktoken", "checkpoints/hf_cache/bigvgan/config.json"}
-    assert set(lock["files"]) == expected
+    assert set(lock["files"]) == expected | {"vad/silero-v6.0.onnx"}
     assert lock["schemaVersion"] == 1
-    assert all(spec == original["files"][name] for name, spec in lock["files"].items())
+    assert all(lock["files"][name] == original["files"][name] for name in expected)
+    assert "/v6.0/" in lock["files"]["vad/silero-v6.0.onnx"]["url"]
 
 
 @pytest.mark.parametrize("mode", ["producer,emotion,audition", "producer", "emotion", "audition", "producer,audition", "emotion,audition"])
@@ -100,6 +114,9 @@ def test_fresh_process_feature_isolation_and_no_model_loading(mode):
     assert not loaded["indextts.runtime.engine"]
     assert not loaded["onnxruntime"]
     assert not loaded["indextts.voicepack.builder"]
+    assert loaded["indextts.material_web"] == ("producer" in enabled)
+    assert loaded["indextts.material_service"] == ("producer" in enabled)
+    assert not loaded["indextts.material_vad"]
     if enabled == ("emotion",):
         assert not loaded["indextts.voicepack.archive"]
         assert not loaded["torch"]

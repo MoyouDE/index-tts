@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "recipe": {
+    "sourceId": "cbaca0ce93cc41e1bd42c5daa09c6488",
+    "sourceSha256": "8529b21758fe996e9c94408a971d6b0b810f3e5b51b76f113b9b053fa3b08610",
+    "audioSha256": "557a58814b9cca6e73b9965d897e38523d224989649df316d6f9dbb56e1a2e86",
+    "materialRevision": "0c51bec58944d664568e64119fb00f702fdf45c2f3ee47746b079a12c9fcdc38",
+    "segments": [
+      {
+        "id": "s002",
+        "start": 5.866,
+        "end": 18.72,
+        "selected": true
+      },
+      {
+        "id": "s003",
+        "start": 18.72,
+        "end": 32.768,
+        "selected": true
+      },
+      {
+        "id": "s006",
+        "start": 39.53,
+        "end": 42.806,
+        "selected": true
+      },
+      {
+        "id": "s008",
+        "start": 46.794,
+        "end": 54.838,
+        "selected": true
+      },
+      {
+        "id": "s012",
+        "start": 70.474,
+        "end": 73.494,
+        "selected": true
+      }
+    ],
+    "heldOut": [
+      {
+        "id": "s009",
+        "start": 60.49,
+        "end": 63.574,
+        "selected": true
+      },
+      {
+        "id": "s011",
+        "start": 67.018,
+        "end": 68.662,
+        "selected": true
+      }
+    ],
+    "primary": "s002",
+    "pauseRange": [
+      0,
+      15
+    ],
+    "removedGaps": [
+      [
+        104517,
+        130448
+      ]
+    ],
+    "confirmedTarget": true,
+    "pauseTargetConfirmed": true
+  },
+  "recipeSha256": "9880ba2b3535633fb59c41753742f298f8dd54def816ef89488372da1ee2ce50",
+  "trainingIds": [
+    "s002",
+    "s003",
+    "s006",
+    "s008",
+    "s012"
+  ],
+  "heldOutIds": [
+    "s009",
+    "s011"
+  ],
+  "clipSha256": {
+    "pause-keep.wav": "3ec1a0bca9c409a91eb70515bd084ab6b85609121f45364290e8891aa2da878e",
+    "pause-short.wav": "8e234dab6d25a7d70bf7a68705df5c9f0cecdb3e077a19cd61b7cf3b569038ba",
+    "s002.wav": "7be0f3757121c123b19817644319d4de5cf4895615c5344c4f4fb480d56c9ab8",
+    "s003.wav": "8d260cfb8d7e2b494d9ef18285ec1f77c6353692158d98ea1fc891d1c63c1c48",
+    "s006.wav": "602b41f9c895a5004b779127611c72bb8d2dfe0d553f8b1d9783501dfa6198a9",
+    "s008.wav": "370c114402bec2b5dc0e96ac855ec528bb244cf6e75f484b0818f8b056cf7f70",
+    "s009.wav": "df77074e901b0b3869d17a88b59a94549fdc8ca563c983194d69a3980b66059d",
+    "s011.wav": "5e6d7d8aa68d265617e37fc299f2bd6355ea9a20b03e70b5a3135a6b124701ce",
+    "s012.wav": "2ec91502883d6b1cf1b0ae46364417a94016d6d328a66460d970db87bf534c3f"
+  },
+  "sourceModels": "voice-producer/models/checkpoints",
+  "readerModels": "USER_FP32_READER_MODELS",
+  "texts": [
+    "今天的天气很好，我们一起去公园散步，顺便聊聊最近发生的事情。",
+    "这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。",
+    "会议安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+    "他停下脚步，想了想，然后轻声说：我们明天再讨论吧。窗外的雨还没有停，但房间里已经安静下来。"
+  ],
+  "seeds": [
+    17,
+    29
+  ],
+  "generationSettings": {
+    "do_sample": false,
+    "num_beams": 3,
+    "repetition_penalty": 10.0,
+    "length_penalty": 0.0,
+    "max_generate_length": 1500,
+    "acoustic_steps": 25,
+    "cfg": 0.7
+  },
+  "cases": [
+    "baseline",
+    "mean-3",
+    "mean-5",
+    "normalized-3",
+    "normalized-5",
+    "pause-keep",
+    "pause-short"
+  ],
+  "precision": "FP32",
+  "encoderDevice": "cpu",
+  "synthesisDevice": "cuda:0",
+  "cpuThreads": 4,
+  "scope": "One source recording; auxiliary CAMPPlus metrics are not subjective quality validation.",
+  "pauseControlStatus": "applicable",
+  "readerManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967"
+}

@@ -59,6 +59,11 @@
       "bytes": 9343,
       "sha256": "c9c176c2b8850ab2e3ba828bbfa969deaf4566ce55db5f2687b8430b87526ad2",
       "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/wav2vec2bert_stats.pt"
+    },
+    "vad/silero-v6.0.onnx": {
+      "bytes": 2327524,
+      "sha256": "597d30b3ec076608d059477bb14cfeffdf951bf5cae370d38f65d33bbfe82004",
+      "url": "https://raw.githubusercontent.com/snakers4/silero-vad/v6.0/src/silero_vad/data/silero_vad.onnx"
     }
   },
   "schemaVersion": 1

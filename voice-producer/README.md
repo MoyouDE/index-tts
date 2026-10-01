@@ -9,6 +9,7 @@
 | 启动入口 | `voice-producer/start.py` | 跟踪 |
 | 下载地址及资产校验 | `voice-producer/assets.lock.json` | 跟踪 |
 | 正式制包权重 | `voice-producer/models/checkpoints/` | 忽略 |
+| Silero VAD v6.0 ONNX | `voice-producer/models/vad/silero-v6.0.onnx` | 忽略；哈希进入资产锁 |
 | 本机音色库 | `outputs/voice-workbench/` | 忽略 |
 | 会话输出 | `outputs/validation-web/` | 忽略 |
 
@@ -36,6 +37,12 @@ uv sync --locked --extra validation-web
 统一页面仍使用 `python -m indextts.validation_web`（默认端口 7861），同样默认使用这个固定模型目录。部署统一页面时可用 `--source-model-dir` 配置其他目录，页面仍不可编辑。
 
 ## 当前独立边界
+
+素材整理复用同一个入口的“长视频／录音素材整理”区域。上传音频或视频后，FFmpeg 提取音轨，Silero VAD 在 CPU 按需加载；它们不加载制包模型。安装 `validation-web` extra 会带入固定版本的 `imageio-ffmpeg`，没有系统 FFmpeg 时使用其随包二进制。现有 PATH 中的 FFmpeg 优先；缺失或解码失败明确报错。
+
+页面提供完整音轨、分段表、片段回放、边界修改、拆分、合并、选择／排除和主参考指定。先保存编辑，再确认选中片段属于同一人物，填写新的音色 ID 并“使用主参考生成音色包”。正式制包只用主参考，其他片段不参与融合；选中片段超过 15 秒必须拆分，不默默截取。VAD 不识别说话人，不能替代人工确认。
+
+素材保存在工作区 `materials/<sourceId>/`，含原文件、22.05kHz 回放音轨、16kHz VAD 输入和分段记录。刷新及重启后从“已保存素材”重新选择即可恢复。制包保存固定主参考及选择快照；补生成另一精度沿用该快照。修改选择后需要新的音色条目。详情和隔离融合实验说明见 [长素材验证记录](../docs/validation/long-material-2026-10-01/README.md)。
 
 锁文件只列制包计算及兼容校验需要的资产，不包含参考示例音频、文本 tokenizer 或 Qwen。保留源 GPT、s2mel checkpoint，运行时严格抽取所需权重；codec/BigVGAN 文件仅用于保持已有包的兼容指纹。当前是资产与入口独立，尚未成为可单独安装的 Python 项目，也没有裁剪专用权重格式。后续若进一步裁剪，应单独验证数值及指纹兼容，不能仅删除这些源文件。
 

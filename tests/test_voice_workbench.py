@@ -92,6 +92,38 @@ def test_import_cannot_overwrite_and_has_no_reference(tmp_path):
     service.close()
 
 
+def test_material_recipe_is_fixed_across_profiles_and_source_edits(tmp_path,monkeypatch):
+    reference=tmp_path/"primary.wav"
+    reference.write_bytes(b"fixed selected audio")
+    digest=sha256_file(reference)
+    selection={"method":"primary-only-v1","primary":"s002","primarySha256":digest,
+               "revision":"old-selection","segments":[{"id":"s002","start":5.,"end":12.,"selected":True}]}
+    source=pack(tmp_path/"first.ivp",reference_hash=digest)
+    store=VoiceWorkspace(tmp_path/"work")
+    installed=store.install(source,reference=reference,reference_selection=selection)
+    vid=load_voicepack(source).voice_id
+    record=store.record(vid)
+    assert record["referenceSelection"]==selection
+    owner=WorkbenchService(tmp_path/"out",store.root,modules="producer")
+    observed=[]
+    def build(ref,*args,reference_selection=None,**kwargs):
+        observed.append((sha256_file(ref),copy.deepcopy(reference_selection)))
+        return "new.ivp",{}
+    monkeypatch.setattr(owner,"build",build)
+    try:
+        owner.rebuild(vid,BF16,"auto","unused",uuid.uuid4().hex)
+        assert observed==[(digest,selection)]
+        old_bytes=Path(installed).read_bytes()
+        changed=copy.deepcopy(selection);changed["revision"]="edited-selection"
+        with pytest.raises(ValueError,match="参考选择"):
+            store.install(source,expected_instance=record["instance"],reference_selection=changed)
+        assert Path(installed).read_bytes()==old_bytes
+        low=pack(tmp_path/"low.ivp",BF16,digest)
+        store.install(low,expected_instance=record["instance"],reference_selection=selection)
+        assert all(v["ready"] for v in store.items()[0]["variants"].values())
+    finally:owner.close()
+
+
 @pytest.mark.parametrize("profile", [FP32, BF16])
 def test_defaults_keep_exact_generation_options(profile):
     values = synthesis_settings(profile)

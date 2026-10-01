@@ -1,0 +1,142 @@
+{
+  "packSha256": "e4e5f2a9de233cacbe8f523c67e65f1e7d0e03c74383164a2aae53eda30e26f0",
+  "manifest": {
+    "conditioningAbi": "indextts2.5-reader-v1",
+    "displayName": "素材单段验证",
+    "files": {
+      "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+      "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+      "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+      "conditioning.safetensors": "25b479e789337eee514f1c861d78e49af4963b12b5a6061432138796aa9be3c2"
+    },
+    "gender": "unknown",
+    "indexTtsVersion": "2.5",
+    "language": "zh",
+    "license": {
+      "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+      "model": "bilibili Model Use License",
+      "modelLicenseFile": "LICENSE",
+      "voiceRights": "provided-separately"
+    },
+    "provenance": {
+      "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+      "producerVersions": {
+        "librosa": "0.10.2.post1",
+        "torch": "2.8.0+cu128",
+        "torchaudio": "2.8.0+cu128",
+        "transformers": "4.52.1"
+      },
+      "profile": "compatible-fp32",
+      "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+      "referenceSha256": "ecc9c59098d898daa8037d01ca18b516512a4f65fe5439cdebc703eb71b10383"
+    },
+    "schemaVersion": 2,
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "tensors": {
+      "base_emotion": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1280
+        ]
+      },
+      "emotion_basis": {
+        "dtype": "float32",
+        "shape": [
+          8,
+          1280
+        ]
+      },
+      "prompt_condition": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1105,
+          512
+        ]
+      },
+      "ref_mel": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          80,
+          1105
+        ]
+      },
+      "speaker_latent": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1280
+        ]
+      },
+      "speaker_style": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          192
+        ]
+      }
+    },
+    "voiceId": "material-qa-20261001"
+  },
+  "referenceSelection": {
+    "sourceId": "972fe67f129847c9ba7cb60e4bdafce3",
+    "sourceSha256": "8529b21758fe996e9c94408a971d6b0b810f3e5b51b76f113b9b053fa3b08610",
+    "audioSha256": "557a58814b9cca6e73b9965d897e38523d224989649df316d6f9dbb56e1a2e86",
+    "revision": "9f256618e2be44ba54d79b83c34f8890d249e24c41cbe8c6176c451ae407118d",
+    "segments": [
+      {
+        "id": "s002",
+        "start": 5.866,
+        "end": 18.7,
+        "selected": true
+      },
+      {
+        "id": "s003",
+        "start": 18.72,
+        "end": 32.768,
+        "selected": true
+      },
+      {
+        "id": "s006",
+        "start": 39.53,
+        "end": 42.806,
+        "selected": true
+      },
+      {
+        "id": "s008",
+        "start": 46.794,
+        "end": 54.838,
+        "selected": true
+      },
+      {
+        "id": "s009",
+        "start": 60.49,
+        "end": 63.574,
+        "selected": true
+      },
+      {
+        "id": "s011",
+        "start": 67.018,
+        "end": 68.662,
+        "selected": true
+      },
+      {
+        "id": "s012",
+        "start": 70.474,
+        "end": 73.494,
+        "selected": true
+      }
+    ],
+    "primary": "s002",
+    "method": "primary-only-v1",
+    "confirmedTarget": true,
+    "primarySha256": "ecc9c59098d898daa8037d01ca18b516512a4f65fe5439cdebc703eb71b10383"
+  },
+  "referenceDurationSeconds": 12.834013605442177,
+  "buildSeconds": 74.922,
+  "device": "cpu",
+  "downloadHashMatches": true,
+  "modelUnloaded": true
+}
