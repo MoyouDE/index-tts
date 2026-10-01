@@ -12,10 +12,13 @@
 $OutputEncoding = [Console]::OutputEncoding
 $env:PYTHONUTF8 = '1'
 uv sync --locked --extra validation-web --extra test
-.venv/Scripts/python.exe -m indextts.validation_web --workspace-dir outputs/voice-workbench --source-model-dir checkpoints --port 7861
+.venv/Scripts/python.exe -m indextts.runtime.assets fetch --root voice-producer/models --lock voice-producer/assets.lock.json
+.venv/Scripts/python.exe -m indextts.validation_web --workspace-dir outputs/voice-workbench --port 7861
 ```
 
 默认仅监听 `127.0.0.1`，不开启分享。情感模型仍通过 `--emotion-model-dir` 或情感页指定，缺少情感模型不影响基础情感试听。Linux 将解释器路径改为 `.venv/bin/python`。
+
+制包权重默认固定在 `voice-producer/models/checkpoints/`，页面只读；音色库仍保存在原工作区。仅需制包时可使用 [独立音色生成工具入口](../voice-producer/README.md)，不启用情感或试听。
 
 ### 按功能启动
 

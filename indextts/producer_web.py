@@ -1,4 +1,5 @@
 """Producer page. It has no emotion or audition page dependency."""
+from pathlib import Path
 from types import SimpleNamespace
 import gradio as gr
 from .validation_common import audio_details
@@ -7,6 +8,8 @@ from .web_common import choices
 
 
 def build_page(service, library, session, *, source_model_dir):
+    source_model_dir = str(Path(source_model_dir).expanduser().resolve())
+
     def preview(path):
         if not path:
             return None, {}
@@ -15,20 +18,21 @@ def build_page(service, library, session, *, source_model_dir):
         except Exception as exc:
             raise gr.Error(str(exc)) from exc
 
-    def build(reference, vid, name, gender, profile, device, source, session, progress=gr.Progress()):
+    def build(reference, vid, name, gender, profile, device, session, progress=gr.Progress()):
         try:
-            return service.build(reference, vid, name, gender, profile, device, source, session, progress)
+            return service.build(reference, vid, name, gender, profile, device, source_model_dir, session, progress)
         except Exception as exc:
             raise gr.Error(str(exc)) from exc
 
-    def inspect(pack, source, session):
+    def inspect(pack, session):
         try:
-            return service.inspect(pack, source, session)
+            return service.inspect(pack, source_model_dir, session)
         except Exception as exc:
             raise gr.Error(str(exc)) from exc
 
     with gr.Tab("音色包生成", id="voices"):
-        source = gr.Textbox(label="源模型目录", value=source_model_dir)
+        gr.Textbox(label="源模型目录", value=source_model_dir, interactive=False,
+                   info="制包使用的源模型权重，固定于工具启动配置；音色包保存在下方本地工作区。")
         with gr.Row():
             with gr.Column():
                 reference = gr.File(label="参考音频", file_types=["audio"], type="filepath")
@@ -48,14 +52,14 @@ def build_page(service, library, session, *, source_model_dir):
         with gr.Accordion("生成与校验结果", open=False):
             report = gr.JSON(label="制包详情")
         reference.change(preview, reference, [audio, info])
-        built = make.click(build, [reference, vid, name, gender, profile, device, source, session], [output, report], concurrency_limit=None)
+        built = make.click(build, [reference, vid, name, gender, profile, device, session], [output, report], concurrency_limit=None)
         unload.click(service.unload_producer, outputs=status, concurrency_id="producer", concurrency_limit=1)
-        library_voice, library_profile = library_controls(library, service.rebuild, session, source, device)
+        library_voice, library_profile = library_controls(library, service.rebuild, session, source_model_dir, device)
         built.success(lambda v: gr.update(choices=choices(library), value=v), vid, library_voice)
         with gr.Accordion("检查已有音色包", open=False):
             pack = gr.File(label="上传 .ivp", file_types=[".ivp"], type="filepath")
-            gr.Markdown("使用上方源模型目录检查兼容性；留空目录时仅检查包结构和完整性。")
+            gr.Markdown("检查包结构、完整性以及与工具固定源模型的兼容性。")
             check = gr.Button("检查音色包")
             inspected = gr.JSON(label="包检查结果")
-            check.click(inspect, [pack, source, session], inspected)
+            check.click(inspect, [pack, session], inspected)
     return SimpleNamespace(voice=library_voice, profile=library_profile)

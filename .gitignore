@@ -31,6 +31,9 @@ desktop.ini
 # Model repository configs are downloaded alongside weights and remain local.
 /checkpoints*/config.yaml
 /outputs/
+# Fixed producer assets are local; their reproducible download lock is tracked.
+/voice-producer/models/*
+!/voice-producer/models/README.md
 
 # Example audio files (downloaded on demand, not stored in git)
 /examples/*.wav

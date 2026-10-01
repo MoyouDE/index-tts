@@ -6,7 +6,7 @@ from .web_common import choices, ui_errors
 
 PROFILES = [("FP32", FP32), ("BF16", BF16)]
 
-def library_controls(library, regenerate_voice, session, source, device):
+def library_controls(library, regenerate_voice, session, source_model_dir, device):
     gr.Markdown("## 本地音色库\n每种精度只保留最新包和最近一次试听。更换参考音频请用新的音色 ID。")
     gr.Textbox(value=str(library.root), label="本地工作区（不进入 Git）", interactive=False)
     with gr.Row():
@@ -55,13 +55,13 @@ def library_controls(library, regenerate_voice, session, source, device):
     save.click(ui_errors(lambda voice, note: (library.notes(voice, note), "备注已保存")[1]), [selected, notes], status)
 
     @ui_errors
-    def regenerate(voice, precision, dev, models, sid, progress=gr.Progress()):
+    def regenerate(voice, precision, dev, sid, progress=gr.Progress()):
         if not voice:
             raise ValueError("请先选择库中音色")
-        path, result = regenerate_voice(voice, precision, dev, models, sid, progress)
+        path, result = regenerate_voice(voice, precision, dev, source_model_dir, sid, progress)
         return path, f"{precision} 生成并校验完成：{result['seconds']:.2f} 秒"
 
-    rebuild.click(regenerate, [selected, profile, device, source, session], [package, status], concurrency_limit=None).then(show, [selected, profile], outputs)
+    rebuild.click(regenerate, [selected, profile, device, session], [package, status], concurrency_limit=None).then(show, [selected, profile], outputs)
 
     @ui_errors
     def import_pack(path):

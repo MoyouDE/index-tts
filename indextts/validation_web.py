@@ -5,8 +5,10 @@ import uuid
 from pathlib import Path
 from .web_modules import parse_modules
 
+DEFAULT_SOURCE_MODEL_DIR = str(Path(__file__).resolve().parents[1] / "voice-producer" / "models" / "checkpoints")
 
-def create_app(*, source_model_dir="checkpoints", emotion_model_dir="", output_dir="outputs/validation-web",
+
+def create_app(*, source_model_dir=DEFAULT_SOURCE_MODEL_DIR, emotion_model_dir="", output_dir="outputs/validation-web",
                workspace_dir="outputs/voice-workbench", modules=None, cpu_threads=4):
     enabled = parse_modules(modules)
     if not isinstance(cpu_threads, int) or isinstance(cpu_threads, bool) or cpu_threads < 1:
@@ -14,10 +16,14 @@ def create_app(*, source_model_dir="checkpoints", emotion_model_dir="", output_d
     import gradio as gr
     from .workbench_service import WorkbenchService
     service = WorkbenchService(output_dir, workspace_dir, modules=enabled, cpu_threads=cpu_threads)
-    with gr.Blocks(title="IndexTTS 模块验证", theme=gr.themes.Soft()) as app:
+    producer_only = enabled == ("producer",)
+    title = "IndexTTS 音色生成工具" if producer_only else "IndexTTS 模块验证"
+    description = ("上传参考音频，生成、管理和下载本地音色包。每种精度保留最新包，不写入交接目录。"
+                   if producer_only else "本地音色制包、管理、情感验证与合成试听。工作区保留每种精度的最新包和最近一次试听，不写入交接目录。")
+    with gr.Blocks(title=title, theme=gr.themes.Soft()) as app:
         session = gr.State(lambda: uuid.uuid4().hex)
         bridge = gr.State(None) if {"emotion", "audition"}.issubset(enabled) else None
-        gr.Markdown("# IndexTTS 模块验证\n本地音色制包、管理、情感验证与合成试听。工作区保留每种精度的最新包和最近一次试听，不写入交接目录。")
+        gr.Markdown(f"# {title}\n{description}")
         pages = {}
         with gr.Tabs() as tabs:
             if "producer" in enabled:
@@ -49,7 +55,8 @@ def create_app(*, source_model_dir="checkpoints", emotion_model_dir="", output_d
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-model-dir", default="checkpoints")
+    parser.add_argument("--source-model-dir", default=DEFAULT_SOURCE_MODEL_DIR,
+                        help="制包源权重固定目录；仅在启动时配置，页面只读")
     parser.add_argument("--emotion-model-dir", default="")
     parser.add_argument("--output-dir", default="outputs/validation-web")
     parser.add_argument("--workspace-dir", default="outputs/voice-workbench")

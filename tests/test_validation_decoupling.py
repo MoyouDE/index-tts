@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import subprocess
+import runpy
 import sys
 import threading
 import uuid
@@ -23,6 +24,63 @@ def test_invalid_module_selection_rejected_before_page_construction(invalid):
 def test_selection_uses_fixed_page_order():
     assert parse_modules("audition, producer") == ("producer", "audition")
     assert parse_modules() == ("producer", "emotion", "audition")
+
+
+@pytest.mark.parametrize("custom_directory", [False, True])
+def test_producer_directory_is_fixed_on_server(tmp_path, monkeypatch, custom_directory):
+    from indextts.workbench_service import WorkbenchService
+    calls = []
+    def capture(operation):
+        def invoke(self, *args):
+            calls.append((operation, args))
+            return ("voice.ivp", {"seconds": 1}) if operation != "inspect" else {}
+        return invoke
+    for operation in ("build", "rebuild", "inspect"):
+        monkeypatch.setattr(WorkbenchService, operation, capture(operation))
+    monkeypatch.chdir(tmp_path)
+    options = {"source_model_dir": "fixed-models"} if custom_directory else {}
+    expected = str(tmp_path / "fixed-models" if custom_directory else ROOT / "voice-producer" / "models" / "checkpoints")
+    app = create_app(modules="producer", workspace_dir=tmp_path/"work", output_dir=tmp_path/"out", **options)
+    try:
+        source = next(c for c in app.config["components"] if c["props"].get("label") == "源模型目录")
+        assert source["props"]["interactive"] is False
+        assert source["props"]["value"] == expected
+        assert all(source["id"] not in d["inputs"] for d in app.config["dependencies"])
+        # Even a changed display value cannot redirect the server's operations.
+        app.blocks[source["id"]].value = "other-models"
+        callbacks = {f.fn.__name__: f.fn for f in app.fns.values() if f.fn}
+        sid = uuid.uuid4().hex
+        callbacks["build"]("reference.wav", "voice", "Voice", "unknown", "compatible-fp32", "auto", sid)
+        callbacks["regenerate"]("voice", "fixed-voice-bf16", "auto", sid)
+        callbacks["inspect"]("voice.ivp", sid)
+        assert [(name, args[{"build": 6, "rebuild": 3, "inspect": 1}[name]]) for name, args in calls] == [
+            ("build", expected), ("rebuild", expected), ("inspect", expected)]
+    finally:
+        app.workbench.close()
+
+
+def test_standalone_producer_entry_uses_fixed_directories_from_other_cwd(tmp_path, monkeypatch):
+    import indextts.validation_web as web
+    received = []
+    monkeypatch.setattr(web, "main", lambda argv: received.append(argv))
+    monkeypatch.chdir(tmp_path)
+    entry = runpy.run_path(str(ROOT / "voice-producer/start.py"))
+    entry["main"](["--port", "7863"])
+    options = dict(zip(received[0][::2], received[0][1::2]))
+    assert options["--modules"] == "producer"
+    assert options["--source-model-dir"] == web.DEFAULT_SOURCE_MODEL_DIR
+    assert options["--workspace-dir"] == str(ROOT / "outputs/voice-workbench")
+    assert options["--port"] == "7863"
+
+
+def test_producer_asset_lock_reuses_existing_hashes_without_unrelated_assets():
+    lock = json.loads((ROOT / "voice-producer/assets.lock.json").read_text(encoding="utf-8"))
+    original = json.loads((ROOT / "tests/fixtures/reader-assets.lock.json").read_text(encoding="utf-8"))
+    expected = set(original["files"]) - {"examples/voice_01.wav", "examples/voice_02.wav",
+        "checkpoints/multilingual_zh_ja_yue_char_del.tiktoken", "checkpoints/hf_cache/bigvgan/config.json"}
+    assert set(lock["files"]) == expected
+    assert lock["schemaVersion"] == 1
+    assert all(spec == original["files"][name] for name, spec in lock["files"].items())
 
 
 @pytest.mark.parametrize("mode", ["producer,emotion,audition", "producer", "emotion", "audition", "producer,audition", "emotion,audition"])

@@ -13,13 +13,12 @@ $OutputEncoding = [Console]::OutputEncoding
 $env:PYTHONUTF8 = '1'
 uv sync --locked --extra validation-web --extra test
 
-# 制包所需源模型与固定参考音频：使用已跟踪的 revision / SHA-256 锁文件。
-.venv/Scripts/python.exe -m indextts.runtime.assets fetch
-.venv/Scripts/python.exe -m indextts.runtime.assets verify
+# 制包正式权重：使用专用目录及已跟踪的 revision / SHA-256 锁文件。
+.venv/Scripts/python.exe -m indextts.runtime.assets fetch --root voice-producer/models --lock voice-producer/assets.lock.json
+.venv/Scripts/python.exe -m indextts.runtime.assets verify --root voice-producer/models --lock voice-producer/assets.lock.json
 
 # 将情感模型目录改为本设备的实际路径，也可省略参数后在页面填写。
 .venv/Scripts/python.exe -m indextts.validation_web `
-  --source-model-dir checkpoints `
   --emotion-model-dir D:/Models/readest-emotion/onnx `
   --output-dir outputs/validation-web `
   --port 7861 --cpu-threads 4
@@ -27,7 +26,7 @@ uv sync --locked --extra validation-web --extra test
 
 Linux 使用 `.venv/bin/python`，并将模型路径改为本机路径。安装范围沿用项目的基础依赖；新增 `validation-web` extra 锁定 Gradio 5.45.0、CPU ONNX Runtime 1.23.2，完整解析结果在 `uv.lock` 中。无需 DeepSpeed、flash-attn 或 Qwen extra。
 
-默认地址为 `http://127.0.0.1:7861`，`share=False`。参数 `--host` 可改变监听地址，默认仅供本机使用。情感模型不包含在 Git 中：需指定已有、通过原有发布校验的 v3 ONNX 目录，包含 `emotion_model.json`、`emotion.onnx`、tokenizer 和 manifest 列出的资产。不存在或损坏会显示错误，绝不返回假成功结果。
+默认地址为 `http://127.0.0.1:7861`，`share=False`。参数 `--host` 可改变监听地址，默认仅供本机使用。制包源权重默认固定在 `voice-producer/models/checkpoints/`，不受启动工作目录影响；页面只读显示绝对路径，生成、补生成及包检查都使用服务端固定配置。独立制包入口、专用资产准备方法见 [音色生成工具](../voice-producer/README.md)。部署到其他设备时可通过 `--source-model-dir` 指定权重目录，启动后不能在页面修改。此目录存放源模型权重，不是本地音色包工作区。情感模型不包含在 Git 中：需指定已有、通过原有发布校验的 v3 ONNX 目录，包含 `emotion_model.json`、`emotion.onnx`、tokenizer 和 manifest 列出的资产。不存在或损坏会显示错误，绝不返回假成功结果。
 
 两个页签按需加载，缺少任一类权重不阻止另一类操作。仅测试情感时无需下载 IndexTTS 源模型。全部模型、上传音频和输出位于忽略目录，跨设备需要重新下载源模型或自行复制情感模型；本次测试的资产指纹见 [验证记录](validation/producer-web-2026-09-26/README.md)。
 
@@ -37,7 +36,7 @@ Linux 使用 `.venv/bin/python`，并将模型路径改为本机路径。安装�
 
 默认 FP32，设备自动选择 CUDA，否则 CPU。BF16 沿用现有混合精度路径：情感/说话人投影采用 BF16，其余参考组件保留原精度。显式选择 BF16 而设备不支持时抛错；可执行 BF16 不代表具备原生加速。BF16 包必须匹配对应 BF16 运行时；不能通过转换 FP32 包的 dtype 替代重新制包。
 
-“检查已有音色包”验证结构、哈希、张量以及源模型指纹；源模型目录留空可仅检查包自身完整性。模型指纹检查仍需读取 codec 和声码器源文件的哈希，但不会初始化这些网络。
+“检查已有音色包”验证结构、哈希、张量以及与工具固定源模型的指纹兼容性。模型指纹检查仍需读取 codec 和声码器源文件的哈希，但不会初始化这些网络。程序接口仍支持仅检查包自身完整性。
 
 `VoicePackBuilder` 默认使用 `ReferenceEncoder`，只构建 Wav2Vec2-BERT、CAMPPlus、情感 Conformer/perceiver 及投影、说话人投影和长度调节器，读取必要统计量与情感矩阵。GPT、s2mel checkpoint 先在 CPU 上读取，严格提取目标子模块权重；不构建 GPT 自回归主干、语义 codec、CFM/DiT、BigVGAN、文本前端或 Qwen。保留历史 librosa 默认 22.05kHz 单声道加载、前 15 秒截取、resample、fbank、计算顺序和六种输出张量，不改变预处理指纹。
 
