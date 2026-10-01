@@ -1,0 +1,39 @@
+..................F.....................                                 [100%]
+================================== FAILURES ===================================
+______________ test_cross_page_options_only_when_targets_enabled ______________
+
+tmp_path = WindowsPath('C:/Users/29711/AppData/Local/Temp/pytest-of-29711/pytest-35/test_cross_page_options_only_w0')
+
+    def test_cross_page_options_only_when_targets_enabled(tmp_path):
+        for mode in ("audition", "producer,audition", "emotion,audition", None):
+            app = create_app(modules=mode, workspace_dir=tmp_path/"work", output_dir=tmp_path/"out")
+            components = app.config["components"]
+            types = {c["id"]: c["type"] for c in components}
+            def check_tabs(node):
+                if types.get(node["id"]) == "tabs":
+                    # A State directly inside Tabs becomes an extra visible tab in Gradio.
+                    assert all(types[child["id"]] == "tabitem" for child in node.get("children", []))
+                for child in node.get("children", []):
+                    check_tabs(child)
+>           check_tabs(app.config["layout"])
+
+tests\test_validation_decoupling.py:136:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+node = {'children': [{'id': 280}, {'id': 281}, {'children': [{'children': [{...}, {...}, {...}, {...}, {...}, {...}, ...], 'id': 283}], 'id': 282}], 'id': 279}
+
+    def check_tabs(node):
+>       if types.get(node["id"]) == "tabs":
+           ^^^^^^^^^^^^^^^^^
+E       KeyError: 279
+
+tests\test_validation_decoupling.py:131: KeyError
+============================== warnings summary ===============================
+.venv\Lib\site-packages\websockets\legacy\__init__.py:6
+  D:\Workspaces\Readest\index-tts\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_validation_decoupling.py::test_cross_page_options_only_when_targets_enabled
+1 failed, 39 passed, 1 warning in 86.55s (0:01:26)

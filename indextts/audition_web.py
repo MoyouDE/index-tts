@@ -11,8 +11,8 @@ PARAMETERS = ["do_sample", "temperature", "top_p", "top_k", "num_beams", "repeti
 
 def build_page(service, library, session, *, emotion_bridge=None, producer_enabled=False):
     saved = library.settings()
-    bridge = emotion_bridge if emotion_bridge is not None else gr.State(None)
     with gr.Tab("合成试听", id="audition") as audition_tab:
+        bridge = emotion_bridge if emotion_bridge is not None else gr.State(None)
         gr.Markdown("选择本地音色包与同精度的裁剪模型。模型目录需自行准备；首次加载和切换配置可能较慢。")
         with gr.Row():
             voice = gr.Dropdown(choices(library), label="试听音色", interactive=True)

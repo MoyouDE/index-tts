@@ -126,6 +126,14 @@ def test_cross_page_options_only_when_targets_enabled(tmp_path):
     for mode in ("audition", "producer,audition", "emotion,audition", None):
         app = create_app(modules=mode, workspace_dir=tmp_path/"work", output_dir=tmp_path/"out")
         components = app.config["components"]
+        types = {c["id"]: c["type"] for c in components}
+        def check_tabs(node):
+            if types.get(node["id"]) == "tabs":
+                # A State directly inside Tabs becomes an extra visible tab in Gradio.
+                assert all(types[child["id"]] == "tabitem" for child in node.get("children", []))
+            for child in node.get("children", []):
+                check_tabs(child)
+        check_tabs(app.config["layout"])
         emotion = next(c["props"] for c in components if c["props"].get("label") == "试听情感")
         assert ("采用情感页结果" in [v[0] for v in emotion["choices"]]) == (mode is None or "emotion" in mode)
         missing = next(c["props"] for c in components if c["props"].get("value") == "前往制包页生成所选精度")

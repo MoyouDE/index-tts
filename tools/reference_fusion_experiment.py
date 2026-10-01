@@ -224,10 +224,48 @@ def synthesize(output,case):
         del runtime
 
 
+def make_blind(output):
+    import numpy as np
+    import soundfile as sf
+    config=checked_configuration(output)
+    blind=output/"blind";blind.mkdir(exist_ok=True)
+    mapping={};available=[]
+    groups={"identity":("V",[c for c in config["cases"] if not c.startswith("pause-")]),
+            "pause":("P",[c for c in config["cases"] if c.startswith("pause-")])}
+    for group,(prefix,cases) in groups.items():
+        if not cases or any(not (output/c/f"seed-{seed}-text-{i}.wav").is_file()
+                            for c in cases for seed in config["seeds"] for i in range(1,len(config["texts"])+1)):
+            continue
+        order=cases.copy();random.Random(917).shuffle(order)
+        labels={f"{prefix}{i+1:02d}":case for i,case in enumerate(order)}
+        mapping.update(labels);available.append(group)
+        for seed in config["seeds"]:
+            for text_index in range(1,len(config["texts"])+1):
+                pieces=[];audio_info=[];loaded=[]
+                for label,case in labels.items():
+                    wave,rate=sf.read(output/case/f"seed-{seed}-text-{text_index}.wav",dtype="float32")
+                    if not len(wave) or not np.isfinite(wave).all(): raise ValueError("无效试听音频")
+                    loaded.append((label,wave,rate))
+                if len({rate for _,_,rate in loaded}) != 1: raise ValueError("试听采样率不一致")
+                target=min(float(np.sqrt(np.mean(w**2))) for _,w,_ in loaded)
+                offset=0.
+                for label,wave,rate in loaded:
+                    gain=min(1.,target/max(1e-8,float(np.sqrt(np.mean(wave**2)))))
+                    sf.write(blind/f"{label}-seed-{seed}-text-{text_index}.wav",wave*gain,rate)
+                    audio_info.append({"label":label,"startSeconds":offset,"durationSeconds":len(wave)/rate})
+                    pieces.extend([wave*gain,np.zeros(rate,dtype=np.float32)]);offset+=len(wave)/rate+1
+                stem=f"{group}-seed-{seed}-text-{text_index}"
+                sf.write(blind/(stem+".wav"),np.concatenate(pieces),rate)
+                save(blind/(stem+".json"),audio_info)
+    save(output/"blind-key.json",mapping)
+    save(output/"blind-info.json",{"availableGroups":available,"identityLabels":"V01 onward",
+         "pauseLabels":"P01 onward","subjectiveVerdict":"pending-user-listening"})
+    return available
+
+
 def summarize(output):
     torch=initialize()
     import numpy as np
-    import soundfile as sf
     from safetensors.torch import load_file
     from indextts.s2mel.modules.campplus.DTDNN import CAMPPlus
     from torch.nn import functional as F
@@ -240,7 +278,7 @@ def summarize(output):
     results=[]
     for case in config["cases"]:
         path=output/case/"synthesis.json"
-        if not path.exists(): continue
+        if not path.exists(): raise ValueError("实验组尚未完成，不能生成完整技术报告")
         report=read(path)
         expected={(seed,i) for seed in config["seeds"] for i in range(1,len(config["texts"])+1)}
         if {(s["seed"],s["textIndex"]) for s in report["samples"]} != expected or len(report["samples"]) != len(expected):
@@ -253,26 +291,7 @@ def summarize(output):
         report["meanHeldOutCosine"]=float(np.mean([s["heldOutCosine"] for s in report["samples"]]))
         report["meanCrossTextCosine"]=float(np.mean([F.cosine_similarity(a,b).item() for i,a in enumerate(embeddings) for j,b in enumerate(embeddings) if i<j and report["samples"][i]["seed"]==report["samples"][j]["seed"]]))
         results.append(report)
-    blind=output/"blind";blind.mkdir(exist_ok=True)
-    order=config["cases"].copy();random.Random(917).shuffle(order)
-    mapping={f"V{i+1:02d}":case for i,case in enumerate(order)}
-    for seed in config["seeds"]:
-        for text_index in range(1,5):
-            pieces=[]; audio_info=[]
-            loaded=[]
-            for label,case in mapping.items():
-                wave,rate=sf.read(output/case/f"seed-{seed}-text-{text_index}.wav",dtype="float32")
-                loaded.append((label,wave,rate))
-            target=min(float(np.sqrt(np.mean(w**2))) for _,w,_ in loaded)
-            offset=0.
-            for label,wave,rate in loaded:
-                gain=min(1.,target/max(1e-8,float(np.sqrt(np.mean(wave**2)))))
-                sf.write(blind/f"{label}-seed-{seed}-text-{text_index}.wav",wave*gain,rate)
-                audio_info.append({"label":label,"startSeconds":offset,"durationSeconds":len(wave)/rate})
-                pieces.extend([wave*gain,np.zeros(rate,dtype=np.float32)]);offset+=len(wave)/rate+1
-            sf.write(blind/f"compare-seed-{seed}-text-{text_index}.wav",np.concatenate(pieces),rate)
-            save(blind/f"compare-seed-{seed}-text-{text_index}.json",audio_info)
-    save(output/"blind-key.json",mapping)
+    make_blind(output)
     save(output/"results.json",{"configuration":config,"results":results,"subjectiveVerdict":"pending-user-listening",
          "formalFusionEnabled":False,"metricLimit":"Same CAMPPlus family as conditioning; first 15 seconds per generated sample; auxiliary only, not independent subjective quality.",
          "memoryScope":"PyTorch allocated/reserved in synthesis child only; RSS is process memory, not whole machine."})
@@ -302,7 +321,7 @@ def run(output):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("stage",choices=["prepare","run","encode","synthesize","summarize"])
+    parser.add_argument("stage",choices=["prepare","run","encode","synthesize","blind","summarize"])
     parser.add_argument("--output",required=True)
     parser.add_argument("--workspace",default=str(ROOT/"outputs/voice-workbench"))
     parser.add_argument("--material-id")
@@ -321,6 +340,7 @@ def main():
     elif args.stage=="run": run(Path(args.output).resolve())
     elif args.stage=="encode": encode(Path(args.output).resolve())
     elif args.stage=="synthesize": synthesize(Path(args.output).resolve(),args.case)
+    elif args.stage=="blind": print(json.dumps(make_blind(Path(args.output).resolve())))
     else: summarize(Path(args.output).resolve())
 
 

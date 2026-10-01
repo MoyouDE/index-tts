@@ -152,3 +152,30 @@ def test_selection_build_fixes_primary_audio_before_waiting_for_producer(materia
         with pytest.raises(ValueError,match="变更"):
             owner.build_selection(selection,"other","Voice","unknown","compatible-fp32","cpu","missing",uuid.uuid4().hex)
     finally:owner.close()
+
+
+def test_blind_comparisons_keep_identity_and_pause_questions_separate(tmp_path):
+    from indextts.material_service import digest_json
+    from tools.reference_fusion_experiment import make_blind
+    config={"recipe":{},"recipeSha256":digest_json({}),"clipSha256":{},"texts":["hello"],"seeds":[17],
+            "cases":["baseline","mean-3","pause-keep","pause-short"]}
+    write_json(tmp_path/"configuration.json",config)
+    for case in config["cases"]:
+        (tmp_path/case).mkdir()
+    def sample(case,amplitude):
+        sf.write(tmp_path/case/"seed-17-text-1.wav",np.full(1600,amplitude,dtype=np.float32),16000,subtype="FLOAT")
+    sample("baseline",.2);sample("mean-3",.4)
+    before=(tmp_path/"mean-3/seed-17-text-1.wav").read_bytes()
+    assert make_blind(tmp_path)==["identity"]
+    assert not (tmp_path/"blind/pause-seed-17-text-1.wav").exists()
+    sample("pause-keep",.1);sample("pause-short",.3)
+    assert make_blind(tmp_path)==["identity","pause"]
+    key=json.loads((tmp_path/"blind-key.json").read_text(encoding="utf-8"))
+    assert {c for label,c in key.items() if label.startswith("V")}=={"baseline","mean-3"}
+    assert {c for label,c in key.items() if label.startswith("P")}=={"pause-keep","pause-short"}
+    assert sf.info(tmp_path/"blind/identity-seed-17-text-1.wav").duration==2.2
+    for label,case in key.items():
+        result,rate=sf.read(tmp_path/"blind"/(label+"-seed-17-text-1.wav"))
+        assert rate==16000 and len(result)==1600
+        assert np.max(result)<=.20001
+    assert (tmp_path/"mean-3/seed-17-text-1.wav").read_bytes()==before
