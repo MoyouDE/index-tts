@@ -1,0 +1,14 @@
+{
+  "bvid": "BV1RYEc65EYg",
+  "status": "Pending human review; not an accepted experimental recipe.",
+  "primaryCandidate": "r01",
+  "candidates": [
+    {"id": "r01", "start": 66.186, "end": 79.606, "role": "training"},
+    {"id": "r02", "start": 231.498, "end": 242.678, "role": "training"},
+    {"id": "r03", "start": 251.050, "end": 261.238, "role": "training"},
+    {"id": "r04", "start": 354.058, "end": 366.774, "role": "training"},
+    {"id": "r05", "start": 461.322, "end": 470.966, "role": "training"},
+    {"id": "h01", "start": 15.978, "end": 25.174, "role": "held-out"},
+    {"id": "h02", "start": 541.354, "end": 546.230, "role": "held-out"}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "video": "https://www.bilibili.com/video/BV1RYEc65EYg/",
+  "bvid": "BV1RYEc65EYg",
+  "title": "【全性向音声】 恋爱冷战收到了女友样貌的共感娃娃（上）",
+  "cid": 38855642510,
+  "durationSeconds": 561.152,
+  "audioBandwidth": 109961,
+  "audioCodec": "mp4a.40.2",
+  "processing": "Original public AAC retained; no denoising, trimming, or source separation.",
+  "files": {
+    "BV1RYEc65EYg.original.m4a": {
+      "bytes": 7714506,
+      "sha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9"
+    }
+  },
+  "material": {
+    "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+    "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+    "durationSeconds": 561.1520181405896,
+    "speechSeconds": 175.16800000000038,
+    "segmentCount": 133,
+    "revision": "f59d1a0f6c81997a8944c8a023fe1d6e41d981188e41fa7ee3947a94dbd2f9bb"
+  }
+}

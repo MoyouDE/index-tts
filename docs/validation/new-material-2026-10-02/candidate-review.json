@@ -1,0 +1,123 @@
+{
+  "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+  "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9",
+  "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+  "materialRevision": "f59d1a0f6c81997a8944c8a023fe1d6e41d981188e41fa7ee3947a94dbd2f9bb",
+  "confirmedTarget": false,
+  "cleanMaterialConfirmed": false,
+  "processing": "Unchanged mono float samples; montage inserts 1 second between clips only.",
+  "candidates": [
+    {
+      "id": "r01",
+      "start": 66.186,
+      "end": 79.606,
+      "role": "training",
+      "file": "r01.wav",
+      "sha256": "516dfca93519eae33aec576c1971c6aa1583072e0146c0754d9915bf20023f26",
+      "durationSeconds": 13.42
+    },
+    {
+      "id": "r02",
+      "start": 231.498,
+      "end": 242.678,
+      "role": "training",
+      "file": "r02.wav",
+      "sha256": "d69d7dd79f4cfd58e8f9ba06502963e4bec6471dfb32288348a798cb84023b48",
+      "durationSeconds": 11.18
+    },
+    {
+      "id": "r03",
+      "start": 251.05,
+      "end": 261.238,
+      "role": "training",
+      "file": "r03.wav",
+      "sha256": "9f442e4ab8a4d97a730c64d21acb7fc112fa0547ab43f0aef1d10a54bf0f0f49",
+      "durationSeconds": 10.187981859410431
+    },
+    {
+      "id": "r04",
+      "start": 354.058,
+      "end": 366.774,
+      "role": "training",
+      "file": "r04.wav",
+      "sha256": "5d876b5640d1be14a9291fe541d2b036cbfca655086d0c85d169afc454d60aa7",
+      "durationSeconds": 12.716009070294785
+    },
+    {
+      "id": "r05",
+      "start": 461.322,
+      "end": 470.966,
+      "role": "training",
+      "file": "r05.wav",
+      "sha256": "ba88da643936c312802602fdec5da228759351e93fd8432de5558f6772c3e62a",
+      "durationSeconds": 9.643990929705215
+    },
+    {
+      "id": "h01",
+      "start": 15.978,
+      "end": 25.174,
+      "role": "held-out",
+      "file": "h01.wav",
+      "sha256": "1d3059d0718acd88a3ec19d318c70593793fbdec30823dc15bf003a0e737cbe8",
+      "durationSeconds": 9.196009070294785
+    },
+    {
+      "id": "h02",
+      "start": 541.354,
+      "end": 546.23,
+      "role": "held-out",
+      "file": "h02.wav",
+      "sha256": "1588e18a0ad621ec3c90db271d388b65621974ce2249e193d19e2fc1d5d7a2d2",
+      "durationSeconds": 4.876009070294785
+    }
+  ],
+  "montages": {
+    "training": {
+      "file": "training-review.wav",
+      "sha256": "bb7dfc9da7fc59abd82933ad846dabbff03e05c1b1a53d17e0998752f2675cf7",
+      "timings": [
+        {
+          "id": "r01",
+          "start": 0.0,
+          "end": 13.42
+        },
+        {
+          "id": "r02",
+          "start": 14.42,
+          "end": 25.6
+        },
+        {
+          "id": "r03",
+          "start": 26.6,
+          "end": 36.78798185941043
+        },
+        {
+          "id": "r04",
+          "start": 37.78798185941043,
+          "end": 50.50399092970522
+        },
+        {
+          "id": "r05",
+          "start": 51.50399092970522,
+          "end": 61.14798185941043
+        }
+      ]
+    },
+    "held-out": {
+      "file": "held-out-review.wav",
+      "sha256": "f7458e749ccb8ee9129372f407a70c0f94e1721d241440b175c2946695df953c",
+      "timings": [
+        {
+          "id": "h01",
+          "start": 0.0,
+          "end": 9.196009070294785
+        },
+        {
+          "id": "h02",
+          "start": 10.196009070294785,
+          "end": 15.072018140589568
+        }
+      ]
+    }
+  }
+}

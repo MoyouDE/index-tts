@@ -1,0 +1,51 @@
+{
+  "checks": [
+    {
+      "id": "r01",
+      "samples": 295911,
+      "peak": 0.6353618502616882,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "r02",
+      "samples": 246519,
+      "peak": 0.7360398769378662,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "r03",
+      "samples": 224645,
+      "peak": 0.8359199166297913,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "r04",
+      "samples": 280388,
+      "peak": 0.9241992831230164,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "r05",
+      "samples": 212650,
+      "peak": 0.829218864440918,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "h01",
+      "samples": 202772,
+      "peak": 0.5956233739852905,
+      "sourceSamplesIdentical": true
+    },
+    {
+      "id": "h02",
+      "samples": 107516,
+      "peak": 0.9386789202690125,
+      "sourceSamplesIdentical": true
+    }
+  ],
+  "montagesUnchangedSamplesWithOneSecondGaps": true,
+  "torchImported": false,
+  "modelsLoaded": false,
+  "synthesisRun": false,
+  "humanConfirmation": "pending"
+}
