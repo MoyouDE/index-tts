@@ -1,0 +1,37 @@
+{
+  "status": "resumed-at-user-request",
+  "pausedAtUtc": "2026-10-01T17:16:47.452983+00:00",
+  "userRequest": "先暂时暂停等我指示",
+  "primary": "r02",
+  "excluded": [
+    "r01"
+  ],
+  "completedSamples": 25,
+  "sampleCounts": {
+    "baseline": 8,
+    "mean-3": 8,
+    "mean-4": 8,
+    "normalized-3": 1,
+    "normalized-4": 0,
+    "pause-keep": 0,
+    "pause-short": 0
+  },
+  "completedCases": [
+    "baseline",
+    "mean-3",
+    "mean-4"
+  ],
+  "interruptedCase": "normalized-3",
+  "remainingCases": [
+    "normalized-3",
+    "normalized-4",
+    "pause-keep",
+    "pause-short"
+  ],
+  "formalFusionEnabled": false,
+  "resumePolicy": "Wait for explicit user instruction. Resume only incomplete stages, preserve completed outputs; do not blindly rerun the run stage.",
+  "userResumeRequest": "继续",
+  "resumedAt": "2026-10-02T10:12:20.764499+08:00",
+  "preservedInitialSamples": 25,
+  "resumeCommand": "python tools/reference_fusion_experiment.py run --output outputs/reference-fusion-BV1RYEc65EYg-20261002 --resume"
+}

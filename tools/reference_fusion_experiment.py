@@ -182,7 +182,48 @@ def silence_metrics(wave,rate):
             "clippingFraction":float(np.mean(np.abs(wave)>=32766/32768))}
 
 
-def synthesize(output,case):
+def control_fingerprint(output, config):
+    from indextts.material_service import digest_json
+    from indextts.voicepack.provenance import sha256_file
+    return digest_json({"recipeSha256":config["recipeSha256"],"texts":config["texts"],
+        "seeds":config["seeds"],"generationSettings":config["generationSettings"],
+        "encoding":read(output/"encoding.json")["sourceModelFingerprint"],
+        "readerManifestSha256":sha256_file(Path(config["readerModels"])/"runtime_model.json")})
+
+
+def resume_report(output, case, config):
+    """Accept only fingerprinted, intact completed samples from the same controls."""
+    path=output/case/"synthesis.json"
+    if not path.exists(): return None
+    report=read(path)
+    expected={(seed,i) for seed in config["seeds"] for i in range(1,len(config["texts"])+1)}
+    seen=set()
+    if report.get("case")!=case: raise ValueError("断点实验组不匹配")
+    if report.get("controlSha256")!=control_fingerprint(output,config):
+        raise ValueError("断点素材、文本或模型控制指纹不同")
+    from indextts.voicepack.provenance import sha256_file
+    import numpy as np
+    import soundfile as sf
+    for sample in report["samples"]:
+        key=(sample["seed"],sample["textIndex"])
+        name=f"seed-{key[0]}-text-{key[1]}.wav"
+        if key not in expected or key in seen or sample["file"]!=name:
+            raise ValueError("断点样本编号非法或重复")
+        audio=output/case/name
+        if not audio.is_file() or sha256_file(audio)!=sample.get("waveformSha256"):
+            raise ValueError("断点音频缺失或哈希不匹配")
+        result=sample["result"]
+        if result["seed"]!=sample["seed"] or result["profile"]!="compatible-fp32" or result["emotionMode"]!="base":
+            raise ValueError("断点推理条件不同")
+        if any(result["generationSettings"].get(k)!=v for k,v in config["generationSettings"].items()):
+            raise ValueError("断点生成参数不同")
+        wave,rate=sf.read(audio,dtype="float32")
+        if rate!=22050 or not len(wave) or not np.isfinite(wave).all(): raise ValueError("断点音频无效")
+        seen.add(key)
+    return report
+
+
+def synthesize(output,case,resume=False):
     torch=initialize()
     import soundfile as sf
     import psutil
@@ -192,6 +233,10 @@ def synthesize(output,case):
     from indextts.runtime.profiles import InferenceOptimizations
     config=checked_configuration(output)
     if case not in config["cases"]: raise ValueError("未知实验组")
+    previous=resume_report(output,case,config) if resume else None
+    done={(s["seed"],s["textIndex"]) for s in previous["samples"]} if previous else set()
+    if len(done)==len(config["seeds"])*len(config["texts"]):
+        print(f"Skip completed {case}",flush=True);return
     if case.startswith("pause-") and config["recipe"].get("pauseTargetConfirmed") is not True:
         raise ValueError("空白对照区间尚未人工确认同一目标人物，不能生成该组")
     destination=output/case;destination.mkdir(exist_ok=True)
@@ -201,10 +246,15 @@ def synthesize(output,case):
     if runtime.profile != "compatible-fp32": raise ValueError("首轮实验必须使用 FP32 裁剪模型")
     if runtime.source_fingerprint!=read(output/"encoding.json")["sourceModelFingerprint"]: raise ValueError("模型指纹不同")
     pack=VoicePack(output/(case+".safetensors"),{"voiceId":"experiment-"+case},raw)
-    report={"case":case,"modelLoadSeconds":time.perf_counter()-started,"samples":[],"gpu":torch.cuda.get_device_name(0)}
+    report={"case":case,"modelLoadSeconds":time.perf_counter()-started,"samples":[],"gpu":torch.cuda.get_device_name(0),
+            "controlSha256":control_fingerprint(output,config)}
+    if previous:
+        previous.setdefault("resumeModelLoadSeconds",[]).append(report["modelLoadSeconds"])
+        report=previous
     try:
         for seed in config["seeds"]:
             for i,text in enumerate(config["texts"],1):
+                if (seed,i) in done: continue
                 torch.cuda.reset_peak_memory_stats()
                 result=runtime.synthesize(text,pack.voice_id,emotion="base",seed=seed,_voice_pack=pack,
                                           generation_settings=config["generationSettings"])
@@ -217,6 +267,8 @@ def synthesize(output,case):
                       "torchPeakReservedMiB":torch.cuda.max_memory_reserved()/1024**2,
                       "processRssMiB":psutil.Process().memory_info().rss/1024**2,
                       **silence_metrics(wave,rate)}
+                from indextts.voicepack.provenance import sha256_file
+                item["waveformSha256"]=sha256_file(audio)
                 report["samples"].append(item)
                 save(destination/"synthesis.json",report)
                 print(f'{case} seed {seed} text {i}: RTF {result["rtf"]:.3f}',flush=True)
@@ -298,14 +350,26 @@ def summarize(output):
     print(json.dumps([{k:r[k] for k in ["case","meanHeldOutCosine","meanCrossTextCosine"]} for r in results]))
 
 
-def run(output):
+def run(output,resume=False):
     from indextts.material_service import write_json
     config=checked_configuration(output)
-    runs=[]
-    for stage,case in [("encode",None)]+[("synthesize",c) for c in config["cases"]]+[("summarize",None)]:
+    runs=read(output/"isolated-runs.json") if resume and (output/"isolated-runs.json").exists() else []
+    if resume:
+        encoding=read(output/"encoding.json")
+        from indextts.voicepack.provenance import sha256_file
+        hashes=encoding.get("tensorHashes",{})
+        required={"styles.safetensors"}|{case+".safetensors" for case in config["cases"]}
+        if set(hashes)!=required or any(sha256_file(output/name)!=value for name,value in hashes.items()):
+            raise ValueError("断点编码张量缺失或哈希不匹配")
+        for case in config["cases"]: resume_report(output,case,config)
+    for stage,case in ([] if resume else [("encode",None)])+[("synthesize",c) for c in config["cases"]]+[("summarize",None)]:
+        if resume and stage=="synthesize":
+            prior=resume_report(output,case,config)
+            if prior and len(prior["samples"])==len(config["seeds"])*len(config["texts"]): continue
         command=[sys.executable,str(Path(__file__).resolve()),stage,"--output",str(output)]
         if case: command += ["--case",case]
-        log=output/(f"{stage}-{case or 'all'}.log")
+        if resume and stage=="synthesize": command += ["--resume"]
+        log=output/(f"{stage}-{case or 'all'}{'-resume' if resume else ''}.log")
         began=time.perf_counter()
         print(f'Start isolated {stage} {case or ""}',flush=True)
         try:
@@ -335,11 +399,12 @@ def main():
     parser.add_argument("--source-model-dir",default=str(ROOT/"voice-producer/models/checkpoints"))
     parser.add_argument("--reader-model-dir")
     parser.add_argument("--case")
+    parser.add_argument("--resume",action="store_true",help="校验已保存的音频和编码哈希，仅补齐剩余合成样本")
     args=parser.parse_args()
     if args.stage=="prepare": prepare(args)
-    elif args.stage=="run": run(Path(args.output).resolve())
+    elif args.stage=="run": run(Path(args.output).resolve(),args.resume)
     elif args.stage=="encode": encode(Path(args.output).resolve())
-    elif args.stage=="synthesize": synthesize(Path(args.output).resolve(),args.case)
+    elif args.stage=="synthesize": synthesize(Path(args.output).resolve(),args.case,args.resume)
     elif args.stage=="blind": print(json.dumps(make_blind(Path(args.output).resolve())))
     else: summarize(Path(args.output).resolve())
 

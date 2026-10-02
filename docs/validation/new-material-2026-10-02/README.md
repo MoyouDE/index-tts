@@ -58,6 +58,12 @@
 
 隔离实验已按用户“先暂时暂停等我指示”停止，所有实验进程已退出。已保留 25 条有效输出：基准、三段等权、四段等权各 8 条，三段归一化 1 条；剩余组没有完成，不将部分输出写为完整技术验证成功。`pause-state.json` 记录断点，`partial-results.json` 保存现有输出哈希和逐条资源记录。等待用户明确指示才继续，恢复前检查断点并保留已有成果，不直接重跑全部实验。
 
+后续用户明确回复“继续”，已启动断点续跑；原暂停记录保留为历史证据，恢复状态见 `resume-state.json`。为实验脚本增加可选 `--resume`：校验参考、文本、生成参数、编码张量及 reader manifest 指纹，逐条验证已有 WAV 的哈希、采样率和有限值；跳过完成组及完成样本，不重新编码、不覆盖既有音频。旧调用不加此参数时保持原执行方式。恢复时新增模型加载耗时另记于 `resumeModelLoadSeconds`，不覆盖首次加载记录。六项断点保护测试通过，记录见 `resume-tests.txt`。
+
+```powershell
+.venv/Scripts/python.exe tools/reference_fusion_experiment.py run --output outputs/reference-fusion-BV1RYEc65EYg-20261002 --resume
+```
+
 编码用时 77.29 秒（CPU 串行）；`encoding-audit.json` 验证了七组均符合六个有限 FP32 张量的 ABI、融合组的四个非身份张量逐元素完全不变、身份平均公式及原 checkpoint 的说话人投影一致。R01 没有进入裁剪／编码目录，留出片段与训练片段不相交。
 
 空白对照参考从 11.180 秒缩短为 8.228 秒，保留组与 R02 基准六张量逐元素一致；缩短组的音频仅删除了记录的间隔，保留对白样本逐元素不变。这是输入控制检查，不是输出停顿改善结论。所有实验 safetensors 均被正式 IVP 加载器拒绝，未安装进正式音色库。

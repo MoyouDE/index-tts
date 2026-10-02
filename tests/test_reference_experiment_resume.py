@@ -1,0 +1,70 @@
+import copy
+import json
+
+import numpy as np
+import pytest
+import soundfile as sf
+
+from tools.reference_fusion_experiment import control_fingerprint, resume_report
+from indextts.voicepack.provenance import sha256_file
+
+
+@pytest.fixture
+def snapshot(tmp_path):
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "runtime_model.json").write_text('{"sourceModelFingerprint":"test"}', encoding="utf-8")
+    (tmp_path / "encoding.json").write_text('{"sourceModelFingerprint":"test"}', encoding="utf-8")
+    config = {"recipeSha256": "reference", "texts": ["one", "two"], "seeds": [17],
+              "generationSettings": {"do_sample": False}, "readerModels": str(model)}
+    destination = tmp_path / "baseline"
+    destination.mkdir()
+    audio = destination / "seed-17-text-1.wav"
+    sf.write(audio, np.ones(2205, dtype=np.float32) * .1, 22050, subtype="FLOAT")
+    sample = {"seed": 17, "textIndex": 1, "file": audio.name, "waveformSha256": sha256_file(audio),
+              "result": {"seed": 17, "profile": "compatible-fp32", "emotionMode": "base",
+                         "generationSettings": {"do_sample": False}}}
+    report = {"case": "baseline", "controlSha256": control_fingerprint(tmp_path, config), "samples": [sample]}
+    path = destination / "synthesis.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+    return tmp_path, config, report, path, audio
+
+
+def test_accepts_intact_partial_snapshot_without_rewriting_audio(snapshot):
+    root, config, report, _, audio = snapshot
+    before = audio.read_bytes()
+    assert resume_report(root, "baseline", config) == report
+    assert audio.read_bytes() == before
+    assert resume_report(root, "not-started", config) is None
+
+
+def test_rejects_changed_text_or_reader_manifest(snapshot):
+    root, config, _, _, _ = snapshot
+    changed = copy.deepcopy(config)
+    changed["texts"][0] = "changed"
+    with pytest.raises(ValueError, match="控制指纹"):
+        resume_report(root, "baseline", changed)
+    (root / "model/runtime_model.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="控制指纹"):
+        resume_report(root, "baseline", config)
+
+
+def test_rejects_corrupted_waveform(snapshot):
+    root, config, _, _, audio = snapshot
+    audio.write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="哈希"):
+        resume_report(root, "baseline", config)
+
+
+@pytest.mark.parametrize("change", ["duplicate", "path", "settings"])
+def test_rejects_invalid_sample_records(snapshot, change):
+    root, config, report, path, _ = snapshot
+    if change == "duplicate":
+        report["samples"].append(copy.deepcopy(report["samples"][0]))
+    elif change == "path":
+        report["samples"][0]["file"] = "../other.wav"
+    else:
+        report["samples"][0]["result"]["generationSettings"]["do_sample"] = True
+    path.write_text(json.dumps(report), encoding="utf-8")
+    with pytest.raises(ValueError):
+        resume_report(root, "baseline", config)
