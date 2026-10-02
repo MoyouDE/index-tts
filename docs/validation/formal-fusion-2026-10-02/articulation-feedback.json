@@ -1,6 +1,6 @@
 {
   "userFeedback": "会议的议发音不清楚",
-  "status": "pending-known-articulation-issue",
+  "status": "original-coarticulation-issue-open-local-workaround-confirmed",
   "voiceId": "bvec-mean-web-01",
   "profile": "compatible-fp32",
   "method": "speaker-mean-v1",
@@ -15,5 +15,8 @@
   "followUpFeedback": "还是不清楚 听起来是议安连读变成了烟",
   "alternateSeed29Accepted": false,
   "boundaryDiagnostic": "Same seed 17, all effective generation settings and pack hash verified identical; one comma added between 会议 and 安排.",
-  "diagnosticVerdict": "pending-user-listening"
+  "diagnosticVerdict": "explicit-boundary-clarity-confirmed-on-this-sentence",
+  "boundaryUserFeedback": "能",
+  "boundaryArticulationAccepted": true,
+  "acceptanceScope": "User confirmed 议 and 安 can be distinguished in the comma diagnostic; this does not accept the unmodified sentence or prove a general repair."
 }
