@@ -63,6 +63,42 @@ class MaterialService:
             return [self.record(p.parent.name) for p in sorted(self.root.glob("*/material.json"))
                     if re.fullmatch(r"[0-9a-f]{32}",p.parent.name)]
 
+    def waveform(self, source_id):
+        """Bounded display peaks, streamed on CPU; never alter reference samples."""
+        import soundfile as sf
+        import numpy as np
+        directory = self.directory(source_id)
+        record = self.record(source_id)
+        cache = directory/"waveform-v1.json"
+        with self.lock:
+            if cache.exists():
+                try:
+                    value = json.loads(cache.read_text(encoding="utf-8"))
+                    if value["audioSha256"] == record["audioSha256"] and value["version"] == 1:
+                        return value
+                except (ValueError, KeyError):
+                    pass
+            low, high = [], []
+            with sf.SoundFile(directory/"audio.wav") as audio:
+                if not audio.frames:
+                    raise ValueError("音轨为空")
+                span = max(1, math.ceil(audio.frames/12000))
+                duration = audio.frames/audio.samplerate
+                while True:
+                    samples = audio.read(span*256, dtype="float32", always_2d=True)
+                    if not len(samples):
+                        break
+                    samples = samples.mean(axis=1)
+                    if not np.isfinite(samples).all():
+                        raise ValueError("音轨含非法数值，无法显示波形")
+                    samples = np.pad(samples, (0, (-len(samples)) % span)).reshape(-1, span)
+                    low.extend(np.round(samples.min(axis=1), 5).tolist())
+                    high.extend(np.round(samples.max(axis=1), 5).tolist())
+            value = {"version": 1, "audioSha256": record["audioSha256"], "duration": duration,
+                     "low": low, "high": high}
+            write_json(cache, value)
+            return value
+
     def suggest_segments(self, source_id, progress=None):
         """Return a fresh editing draft; never overwrite an existing selection."""
         audio = self.directory(source_id)/"vad.wav"

@@ -104,12 +104,14 @@ def test_workflow_encoding_failure_can_retry_and_queued_settings_are_fixed(mater
     try:
         sid = uuid.uuid4().hex
         prepared, revision, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            record["revision"], True, "auto", "b", 9., 18., "Voice", "unknown", "compatible-fp32", "cpu", sid)
+            record["revision"], True, "auto", json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
+            "Voice", "unknown", "compatible-fp32", "cpu", sid)
         with pytest.raises(Exception, match="model unavailable"):
             callbacks["generate_snapshot"](prepared)
         # A retry uses the revision already returned before encoding failed.
         retry, _, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            revision, True, "auto", "b", 9., 18., "Voice", "unknown", "compatible-fp32", "cpu", sid)
+            revision, True, "auto", json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
+            "Voice", "unknown", "compatible-fp32", "cpu", sid)
         result = callbacks["generate_snapshot"](retry)
         assert result[0] == "voice.ivp"
         selected, profile = callbacks["select_generated"](result[1])
@@ -154,7 +156,7 @@ def test_intelligent_suggestions_leave_saved_manual_selection_unchanged(material
     assert service.record(record["sourceId"]) == record
 
 
-def test_unretained_range_cannot_be_used_for_generation(material, tmp_path):
+def test_browser_draft_is_authoritative_and_source_switch_is_rejected(material, tmp_path):
     from indextts.validation_web import create_app
     service, record = material
     record["name"] = "reference.wav"
@@ -162,12 +164,42 @@ def test_unretained_range_cannot_be_used_for_generation(material, tmp_path):
     app = create_app(modules="producer", workspace_dir=service.root.parent, output_dir=tmp_path/"out")
     prepare = next(f.fn for f in app.fns.values() if f.fn and f.fn.__name__ == "prepare")
     try:
-        with pytest.raises(Exception, match="保留"):
+        with pytest.raises(Exception, match="不一致"):
             prepare(record["sourceId"], rows(record), "a", record["revision"], True, "auto",
-                    "a", 2., 7., "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
+                    json.dumps({"sourceId": "other", "rows": rows(record), "primary": "a"}),
+                    "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
         assert service.record(record["sourceId"]) == record
+        # A recent graphical edit may precede table mirroring; generation uses that edit.
+        edited = [["a", 2., 7., True], ["b", 9., 18., False]]
+        job, _, _ = prepare(record["sourceId"], rows(record), "b", record["revision"], True, "auto",
+                    json.dumps({"sourceId": record["sourceId"], "rows": edited, "primary": "a"}),
+                    "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
+        assert job["selection"]["segments"] == [{"id": "a", "start": 2., "end": 7., "selected": True}]
+        assert job["selection"]["method"] == "primary-only-v1"
     finally:
         app.workbench.close()
+
+
+def test_waveform_cache_bounds_size_preserves_samples_and_recovers(material):
+    service, record = material
+    audio = service.directory(record["sourceId"])/"audio.wav"
+    before = audio.read_bytes()
+    peaks = service.waveform(record["sourceId"])
+    assert peaks["duration"] == 20 and 0 < len(peaks["low"]) <= 12000
+    assert len(peaks["low"]) == len(peaks["high"])
+    assert min(peaks["low"]) == pytest.approx(-.2) and max(peaks["high"]) == pytest.approx(.2)
+    assert service.waveform(record["sourceId"]) == peaks
+    (audio.parent/"waveform-v1.json").write_text("broken", encoding="utf-8")
+    assert service.waveform(record["sourceId"]) == peaks
+    assert audio.read_bytes() == before and service.record(record["sourceId"]) == record
+
+
+@pytest.mark.parametrize("draft", ["", "null", "[]", '{"sourceId":"other"}',
+    '{"sourceId":"test","rows":[["a",true,3,true]],"primary":"a"}'])
+def test_invalid_graphical_draft_is_rejected(draft):
+    from indextts.material_web import read_draft
+    with pytest.raises(ValueError, match="选择未就绪"):
+        read_draft("test", draft)
 
 
 @pytest.mark.parametrize("bad", [
