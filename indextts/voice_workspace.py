@@ -66,7 +66,7 @@ class VoiceWorkspace:
             raise ValueError("未知精度")
         return self.directory(voice_id) / (profile + ".ivp")
 
-    def install(self, pack_path, *, reference=None, expected_instance=None, reference_selection=None):
+    def install(self, pack_path, *, reference=None, expected_instance=None, reference_selection=None, references=None):
         pack = load_voicepack(pack_path)
         profile = pack.manifest.get("provenance", {}).get("profile")
         if profile is None:
@@ -74,6 +74,9 @@ class VoiceWorkspace:
             if any(spec["dtype"] != "float32" for spec in pack.manifest["tensors"].values()):
                 raise ValueError("旧包没有精度 provenance，且不是全 FP32；请从参考音频重新制包")
             profile = FP32
+        if reference_selection is not None and reference_selection.get("method") == "speaker-mean-v1":
+            if pack.manifest.get("provenance", {}).get("referenceSelection") != reference_selection:
+                raise ValueError("包内来源与参考选择不一致")
         voice_id = pack.voice_id
         with self.lock:
             directory = self.directory(voice_id)
@@ -106,8 +109,16 @@ class VoiceWorkspace:
                         if pack.manifest.get("provenance", {}).get("referenceSha256") != record["referenceSha256"]:
                             raise ValueError("参考音频哈希与制包结果不匹配")
                     if reference_selection is not None:
-                        if reference_selection.get("method") != "primary-only-v1" or reference_selection.get("primarySha256") != record["referenceSha256"]:
+                        if reference_selection.get("method") not in {"primary-only-v1", "speaker-mean-v1"} or reference_selection.get("primarySha256") != record["referenceSha256"]:
                             raise ValueError("参考选择与主参考音频不匹配")
+                        if reference_selection["method"] == "speaker-mean-v1":
+                            from .voicepack.selection import validate_selection
+                            validate_selection(reference_selection, references, staging / ref_name)
+                            if pack.manifest.get("provenance", {}).get("referenceSelection") != reference_selection:
+                                raise ValueError("包内来源与参考选择不一致")
+                            (staging / "references").mkdir()
+                            for sid, path in references.items():
+                                shutil.copyfile(path, staging / "references" / (sid + ".wav"))
                         record["referenceSelection"] = reference_selection
                     atomic_json(staging / "voice.json", record)
                     # New entries are made visible together, never as half-created records.

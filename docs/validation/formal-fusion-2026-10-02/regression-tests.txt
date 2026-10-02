@@ -1,0 +1,28 @@
+........................................................................ [ 68%]
+.................................                                        [100%]
+============================== warnings summary ===============================
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:241
+  <frozen importlib._bootstrap>:241: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+.venv\Lib\site-packages\websockets\legacy\__init__.py:6
+  D:\Workspaces\Readest\index-tts\.venv\Lib\site-packages\websockets\legacy\__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+.venv\Lib\site-packages\librosa\core\intervals.py:15
+  D:\Workspaces\Readest\index-tts\.venv\Lib\site-packages\librosa\core\intervals.py:15: DeprecationWarning: path is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with resources.path("librosa.core", "intervals.msgpack") as imsgpack:
+
+tests/test_validation_modules.py::test_reference_preprocessing_keeps_historical_samples[16000-1-1]
+  D:\Workspaces\Readest\index-tts\.venv\Lib\site-packages\audioread\rawread.py:16: DeprecationWarning: 'aifc' is deprecated and slated for removal in Python 3.13
+    import aifc
+
+tests/test_validation_modules.py::test_reference_preprocessing_keeps_historical_samples[16000-1-1]
+  D:\Workspaces\Readest\index-tts\.venv\Lib\site-packages\audioread\rawread.py:19: DeprecationWarning: 'sunau' is deprecated and slated for removal in Python 3.13
+    import sunau
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+105 passed, 6 warnings in 110.00s (0:01:50)
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

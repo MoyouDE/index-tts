@@ -114,6 +114,19 @@ class ReferenceEncoder:
         self._loaded = True
 
     @torch.no_grad()
+    def extract_speaker_style(self, audio_path):
+        """Additional selected fragments need only identity, not semantic prompts."""
+        with self._lock:
+            audio, rate = load_reference_audio(audio_path)
+            self._load()
+            audio_16k = audio if rate == 16000 else torchaudio.functional.resample(audio, rate, 16000)
+            feat = torchaudio.compliance.kaldi.fbank(audio_16k.to(self.device), num_mel_bins=80,
+                                                   dither=0, sample_frequency=16000)
+            feat = feat - feat.mean(dim=0, keepdim=True)
+            with staged_model(self.camp, self.device) as model:
+                return model(feat.unsqueeze(0)).detach().cpu().contiguous()
+
+    @torch.no_grad()
     def extract_voice_conditioning(self, audio_path, verbose=False):
         with self._lock:
             audio, rate = load_reference_audio(audio_path)

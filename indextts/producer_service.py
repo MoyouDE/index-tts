@@ -30,7 +30,7 @@ class ProducerService:
             self._close_model()
         return "制包模型已卸载"
 
-    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None):
+    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, reference_selection=None, references=None):
         from .voicepack.schema import validate_identity
         from .voicepack.archive import load_voicepack
         validate_identity(voice_id, name, gender)
@@ -58,7 +58,8 @@ class ProducerService:
                 self._producer = VoicePackBuilder(model_dir=root, profile=profile, device=device)
                 self._producer_key = key
             try:
-                path = self._producer.build(uploaded, {"voiceId": voice_id, "displayName": name, "gender": gender}, job / (voice_id + ".ivp"))
+                kwargs = {"reference_selection": reference_selection, "references": references} if reference_selection is not None else {}
+                path = self._producer.build(uploaded, {"voiceId": voice_id, "displayName": name, "gender": gender}, job / (voice_id + ".ivp"), **kwargs)
                 pack = load_voicepack(path, expected_model_fingerprint=self._producer.source_model_fingerprint())
             except Exception:
                 logger.exception("Producer failed: session=%s voice=%s", session_id, voice_id)

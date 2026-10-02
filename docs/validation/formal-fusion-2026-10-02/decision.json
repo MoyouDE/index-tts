@@ -1,0 +1,25 @@
+{
+  "userFeedback": "我都感觉差不多 虽然稍微有差异，但是不好说哪个不好",
+  "reviewPolicy": "Agent selects a candidate and records rationale; human judges acceptability only.",
+  "chosenMethod": "speaker-mean-v1",
+  "trainingFragments": [
+    "r02",
+    "r03",
+    "r04",
+    "r05"
+  ],
+  "primary": "r02",
+  "selectionRationale": [
+    "Highest mean held-out CAMPPlus cosine among identity candidates on this material (0.75063 versus baseline 0.72377).",
+    "Cross-text mean cosine 0.90695 versus baseline 0.90882; no claim of improvement in every dimension.",
+    "Raw equal mean is simpler than norm-restored fusion and preserves four nonidentity tensors.",
+    "User did not report an obvious unacceptable version."
+  ],
+  "limits": [
+    "Same CAMPPlus model family; auxiliary evidence only.",
+    "No universal quality improvement claim.",
+    "Candidate output acceptance pending."
+  ],
+  "defaultMethod": "primary-only-v1",
+  "silenceHandling": "No automatic shortening in production; pause experiment retained separately."
+}

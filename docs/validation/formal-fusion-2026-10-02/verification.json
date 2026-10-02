@@ -1,0 +1,892 @@
+{
+  "fp32Build": {
+    "ok": true,
+    "seconds": 60.433,
+    "audio": {
+      "durationSeconds": 11.18,
+      "sampleRate": 22050,
+      "channels": 1,
+      "usedSeconds": 11.18,
+      "truncated": false
+    },
+    "manifest": {
+      "conditioningAbi": "indextts2.5-reader-v1",
+      "displayName": "长素材等权融合试听",
+      "files": {
+        "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+        "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+        "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+        "conditioning.safetensors": "06534b5b53ffe795ddfea3254c3f886d3f2457aac7371aedc62c02fcbb3bf85b"
+      },
+      "gender": "female",
+      "indexTtsVersion": "2.5",
+      "language": "zh",
+      "license": {
+        "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+        "model": "bilibili Model Use License",
+        "modelLicenseFile": "LICENSE",
+        "voiceRights": "provided-separately"
+      },
+      "provenance": {
+        "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+        "producerVersions": {
+          "librosa": "0.10.2.post1",
+          "torch": "2.8.0+cu128",
+          "torchaudio": "2.8.0+cu128",
+          "transformers": "4.52.1"
+        },
+        "profile": "compatible-fp32",
+        "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+        "referenceSelection": {
+          "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+          "confirmedTarget": true,
+          "method": "speaker-mean-v1",
+          "primary": "r02",
+          "primarySha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4",
+          "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+          "segments": [
+            {
+              "end": 242.678,
+              "id": "r02",
+              "selected": true,
+              "sha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4",
+              "start": 231.498
+            },
+            {
+              "end": 261.238,
+              "id": "r03",
+              "selected": true,
+              "sha256": "8d6aacb88f88e17bb6abaf2cb0514812f7043481ea1b671fdde68b68c833f20b",
+              "start": 251.05
+            },
+            {
+              "end": 366.774,
+              "id": "r04",
+              "selected": true,
+              "sha256": "70fcd116a1b714121c891e2b0d5f489b9b2315b6744291941b9e713d3aa6a475",
+              "start": 354.058
+            },
+            {
+              "end": 470.966,
+              "id": "r05",
+              "selected": true,
+              "sha256": "cdfd9786bd1db378b7498d3900d204965c225f579394be8a7f2b27b8623afa0f",
+              "start": 461.322
+            }
+          ],
+          "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+          "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9"
+        },
+        "referenceSha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+      },
+      "schemaVersion": 3,
+      "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+      "tensors": {
+        "base_emotion": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            1280
+          ]
+        },
+        "emotion_basis": {
+          "dtype": "float32",
+          "shape": [
+            8,
+            1280
+          ]
+        },
+        "prompt_condition": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            962,
+            512
+          ]
+        },
+        "ref_mel": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            80,
+            962
+          ]
+        },
+        "speaker_latent": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            1280
+          ]
+        },
+        "speaker_style": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            192
+          ]
+        }
+      },
+      "voiceId": "bvec-mean-review-01"
+    },
+    "referenceSelection": {
+      "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+      "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9",
+      "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+      "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+      "segments": [
+        {
+          "id": "r02",
+          "start": 231.498,
+          "end": 242.678,
+          "selected": true,
+          "sha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+        },
+        {
+          "id": "r03",
+          "start": 251.05,
+          "end": 261.238,
+          "selected": true,
+          "sha256": "8d6aacb88f88e17bb6abaf2cb0514812f7043481ea1b671fdde68b68c833f20b"
+        },
+        {
+          "id": "r04",
+          "start": 354.058,
+          "end": 366.774,
+          "selected": true,
+          "sha256": "70fcd116a1b714121c891e2b0d5f489b9b2315b6744291941b9e713d3aa6a475"
+        },
+        {
+          "id": "r05",
+          "start": 461.322,
+          "end": 470.966,
+          "selected": true,
+          "sha256": "cdfd9786bd1db378b7498d3900d204965c225f579394be8a7f2b27b8623afa0f"
+        }
+      ],
+      "primary": "r02",
+      "method": "speaker-mean-v1",
+      "confirmedTarget": true,
+      "primarySha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+    },
+    "conditioningMethod": "speaker-mean-v1"
+  },
+  "fp32ExperimentComparison": {
+    "base_emotion": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    },
+    "emotion_basis": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    },
+    "prompt_condition": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    },
+    "ref_mel": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    },
+    "speaker_latent": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    },
+    "speaker_style": {
+      "exact": true,
+      "maxAbsoluteDifference": 0.0
+    }
+  },
+  "fp32PackSha256": "74d103b4acce9d21a66a79b2f68f0d64e54b477e361ec4b8718e26fcbe56a593",
+  "bf16Build": {
+    "ok": true,
+    "seconds": 51.337,
+    "audio": {
+      "durationSeconds": 11.18,
+      "sampleRate": 22050,
+      "channels": 1,
+      "usedSeconds": 11.18,
+      "truncated": false
+    },
+    "manifest": {
+      "conditioningAbi": "indextts2.5-reader-v1",
+      "displayName": "长素材等权融合试听",
+      "files": {
+        "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+        "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+        "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+        "conditioning.safetensors": "beebaa9a403fd5ea2f192571cf98faf6cc6ff04bb8a4275fa046251ff2666fdb"
+      },
+      "gender": "female",
+      "indexTtsVersion": "2.5",
+      "language": "zh",
+      "license": {
+        "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+        "model": "bilibili Model Use License",
+        "modelLicenseFile": "LICENSE",
+        "voiceRights": "provided-separately"
+      },
+      "provenance": {
+        "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+        "producerVersions": {
+          "librosa": "0.10.2.post1",
+          "torch": "2.8.0+cu128",
+          "torchaudio": "2.8.0+cu128",
+          "transformers": "4.52.1"
+        },
+        "profile": "fixed-voice-bf16",
+        "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+        "referenceSelection": {
+          "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+          "confirmedTarget": true,
+          "method": "speaker-mean-v1",
+          "primary": "r02",
+          "primarySha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4",
+          "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+          "segments": [
+            {
+              "end": 242.678,
+              "id": "r02",
+              "selected": true,
+              "sha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4",
+              "start": 231.498
+            },
+            {
+              "end": 261.238,
+              "id": "r03",
+              "selected": true,
+              "sha256": "8d6aacb88f88e17bb6abaf2cb0514812f7043481ea1b671fdde68b68c833f20b",
+              "start": 251.05
+            },
+            {
+              "end": 366.774,
+              "id": "r04",
+              "selected": true,
+              "sha256": "70fcd116a1b714121c891e2b0d5f489b9b2315b6744291941b9e713d3aa6a475",
+              "start": 354.058
+            },
+            {
+              "end": 470.966,
+              "id": "r05",
+              "selected": true,
+              "sha256": "cdfd9786bd1db378b7498d3900d204965c225f579394be8a7f2b27b8623afa0f",
+              "start": 461.322
+            }
+          ],
+          "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+          "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9"
+        },
+        "referenceSha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+      },
+      "schemaVersion": 3,
+      "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+      "tensors": {
+        "base_emotion": {
+          "dtype": "bfloat16",
+          "shape": [
+            1,
+            1280
+          ]
+        },
+        "emotion_basis": {
+          "dtype": "float32",
+          "shape": [
+            8,
+            1280
+          ]
+        },
+        "prompt_condition": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            962,
+            512
+          ]
+        },
+        "ref_mel": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            80,
+            962
+          ]
+        },
+        "speaker_latent": {
+          "dtype": "bfloat16",
+          "shape": [
+            1,
+            1280
+          ]
+        },
+        "speaker_style": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            192
+          ]
+        }
+      },
+      "voiceId": "bvec-mean-review-01"
+    },
+    "referenceSelection": {
+      "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+      "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9",
+      "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+      "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+      "segments": [
+        {
+          "id": "r02",
+          "start": 231.498,
+          "end": 242.678,
+          "selected": true,
+          "sha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+        },
+        {
+          "id": "r03",
+          "start": 251.05,
+          "end": 261.238,
+          "selected": true,
+          "sha256": "8d6aacb88f88e17bb6abaf2cb0514812f7043481ea1b671fdde68b68c833f20b"
+        },
+        {
+          "id": "r04",
+          "start": 354.058,
+          "end": 366.774,
+          "selected": true,
+          "sha256": "70fcd116a1b714121c891e2b0d5f489b9b2315b6744291941b9e713d3aa6a475"
+        },
+        {
+          "id": "r05",
+          "start": 461.322,
+          "end": 470.966,
+          "selected": true,
+          "sha256": "cdfd9786bd1db378b7498d3900d204965c225f579394be8a7f2b27b8623afa0f"
+        }
+      ],
+      "primary": "r02",
+      "method": "speaker-mean-v1",
+      "confirmedTarget": true,
+      "primarySha256": "75e7d5901f2477d20877e2a233cf5e82557529ab2b0a0d41f12820d5ab4264e4"
+    },
+    "conditioningMethod": "speaker-mean-v1"
+  },
+  "bf16PackSha256": "5726413a0cc63ebf813fab73e7350655d64d68817d361e35812e0dab3f67ed3c",
+  "compatible-fp32Audition": {
+    "voiceId": "bvec-mean-review-01",
+    "profile": "compatible-fp32",
+    "packSha256": "74d103b4acce9d21a66a79b2f68f0d64e54b477e361ec4b8718e26fcbe56a593",
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "runtimeManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967",
+    "text": "这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。",
+    "emotion": "base",
+    "speed": 1.0,
+    "seed": 17,
+    "modelLoadMs": 37715.99,
+    "modelReused": false,
+    "device": "cuda:0",
+    "cpuThreads": 4,
+    "allocator": "native",
+    "optimizations": "all",
+    "result": {
+      "sampleRate": 22050,
+      "durationMs": 6780,
+      "emotionMode": "base",
+      "emotionVector": null,
+      "rawEmotion": "base",
+      "seed": 17,
+      "profile": "compatible-fp32",
+      "speechDurationMs": 6780.23,
+      "rtf": 2.9632536372271057,
+      "timings": {
+        "emotionMs": 0.0,
+        "prepareMs": 65.63,
+        "gptMs": 6448.66,
+        "acousticMs": 11910.22,
+        "vocoderMs": 1665.98,
+        "totalMs": 20095.65,
+        "waveformMs": 20091.53,
+        "queueMs": 0.06,
+        "requestTotalMs": 20099.85
+      },
+      "warnings": [],
+      "generationSettings": {
+        "do_sample": false,
+        "num_beams": 3,
+        "repetition_penalty": 10.0,
+        "length_penalty": 0.0,
+        "max_generate_length": 1500,
+        "num_return_sequences": 1,
+        "acoustic_steps": 25,
+        "cfg": 0.7
+      }
+    },
+    "memory": {
+      "cudaMemoryAllocatedBytes": 3458033664,
+      "cudaMemoryReservedBytes": 5431623680,
+      "peakCudaMemoryAllocatedBytes": 4112042496,
+      "peakCudaMemoryReservedBytes": 5431623680
+    },
+    "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存"
+  },
+  "fixed-voice-bf16Audition": {
+    "voiceId": "bvec-mean-review-01",
+    "profile": "fixed-voice-bf16",
+    "packSha256": "5726413a0cc63ebf813fab73e7350655d64d68817d361e35812e0dab3f67ed3c",
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "runtimeManifestSha256": "f9c7356e66a482ba3af001763223876ceeeb42ca3e30ba78a76ee65f680e3df9",
+    "text": "这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。",
+    "emotion": "base",
+    "speed": 1.0,
+    "seed": 17,
+    "modelLoadMs": 36909.01,
+    "modelReused": false,
+    "device": "cuda:0",
+    "cpuThreads": 4,
+    "allocator": "native",
+    "optimizations": "all",
+    "result": {
+      "sampleRate": 22050,
+      "durationMs": 6664,
+      "emotionMode": "base",
+      "emotionVector": null,
+      "rawEmotion": "base",
+      "seed": 17,
+      "profile": "fixed-voice-bf16",
+      "speechDurationMs": 6664.13,
+      "rtf": 3.3093517354229416,
+      "timings": {
+        "emotionMs": 0.0,
+        "prepareMs": 54.82,
+        "gptMs": 8597.77,
+        "acousticMs": 11741.25,
+        "vocoderMs": 1659.1,
+        "totalMs": 22067.29,
+        "waveformMs": 22053.94,
+        "queueMs": 0.05,
+        "requestTotalMs": 22072.71
+      },
+      "warnings": [],
+      "generationSettings": {
+        "do_sample": false,
+        "num_beams": 3,
+        "repetition_penalty": 10.0,
+        "length_penalty": 0.0,
+        "max_generate_length": 1500,
+        "num_return_sequences": 1,
+        "top_p": 0.8,
+        "top_k": 30,
+        "temperature": 0.8,
+        "acoustic_steps": 25,
+        "cfg": 0.7
+      }
+    },
+    "memory": {
+      "cudaMemoryAllocatedBytes": 2260545024,
+      "cudaMemoryReservedBytes": 4215275520,
+      "peakCudaMemoryAllocatedBytes": 2913648640,
+      "peakCudaMemoryReservedBytes": 4215275520
+    },
+    "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存"
+  },
+  "webFp32ExperimentComparison": {
+    "base_emotion": true,
+    "emotion_basis": true,
+    "prompt_condition": true,
+    "ref_mel": true,
+    "speaker_latent": true,
+    "speaker_style": true
+  },
+  "downloadMatchesPack": true,
+  "oldValidatorRejectsV3": "manifest 含未知字段: provenance",
+  "browser": {
+    "compatible-fp32": {
+      "packSha256": "335b42f32a2a1a3df209efca1e6dea0faa9da889170c29bb9e112e4664336660",
+      "manifest": {
+        "conditioningAbi": "indextts2.5-reader-v1",
+        "displayName": "长素材融合成品",
+        "files": {
+          "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+          "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+          "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+          "conditioning.safetensors": "06534b5b53ffe795ddfea3254c3f886d3f2457aac7371aedc62c02fcbb3bf85b"
+        },
+        "gender": "unknown",
+        "indexTtsVersion": "2.5",
+        "language": "zh",
+        "license": {
+          "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+          "model": "bilibili Model Use License",
+          "modelLicenseFile": "LICENSE",
+          "voiceRights": "provided-separately"
+        },
+        "provenance": {
+          "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+          "producerVersions": {
+            "librosa": "0.10.2.post1",
+            "torch": "2.8.0+cu128",
+            "torchaudio": "2.8.0+cu128",
+            "transformers": "4.52.1"
+          },
+          "profile": "compatible-fp32",
+          "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+          "referenceSelection": {
+            "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+            "confirmedTarget": true,
+            "method": "speaker-mean-v1",
+            "primary": "r02",
+            "primarySha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+            "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+            "segments": [
+              {
+                "end": 242.678,
+                "id": "r02",
+                "selected": true,
+                "sha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+                "start": 231.498
+              },
+              {
+                "end": 261.238,
+                "id": "r03",
+                "selected": true,
+                "sha256": "7a782f9ab1858243f06fae61d7cb6e70526364cb9fd4237d4dd20a7d67171f93",
+                "start": 251.05
+              },
+              {
+                "end": 366.774,
+                "id": "r04",
+                "selected": true,
+                "sha256": "1a43d32268811fd1e440668fe3d00496e6490b980d8f4507915fe0bfda18b972",
+                "start": 354.058
+              },
+              {
+                "end": 470.966,
+                "id": "r05",
+                "selected": true,
+                "sha256": "e6840c43a4e56105be3e9b793d4594bb688123e422150e2cea506d765acfab12",
+                "start": 461.322
+              }
+            ],
+            "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+            "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9"
+          },
+          "referenceSha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59"
+        },
+        "schemaVersion": 3,
+        "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+        "tensors": {
+          "base_emotion": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              1280
+            ]
+          },
+          "emotion_basis": {
+            "dtype": "float32",
+            "shape": [
+              8,
+              1280
+            ]
+          },
+          "prompt_condition": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              962,
+              512
+            ]
+          },
+          "ref_mel": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              80,
+              962
+            ]
+          },
+          "speaker_latent": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              1280
+            ]
+          },
+          "speaker_style": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              192
+            ]
+          }
+        },
+        "voiceId": "bvec-mean-web-01"
+      },
+      "matchesPriorFullEncoding": {
+        "speaker_style": true,
+        "speaker_latent": true,
+        "base_emotion": true,
+        "ref_mel": true,
+        "emotion_basis": true,
+        "prompt_condition": true
+      },
+      "wavSha256": "c62e820a6223bdbf72fceef28e9e65c99527cb8bde2b25d2502474f71d9bbd9b",
+      "downloadMatches": true,
+      "report": {
+        "voiceId": "bvec-mean-web-01",
+        "profile": "compatible-fp32",
+        "packSha256": "335b42f32a2a1a3df209efca1e6dea0faa9da889170c29bb9e112e4664336660",
+        "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+        "runtimeManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967",
+        "text": "会议安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+        "emotion": "base",
+        "speed": 1,
+        "seed": 17,
+        "modelLoadMs": 41576.73,
+        "modelReused": false,
+        "device": "cuda:0",
+        "cpuThreads": 4,
+        "allocator": "native",
+        "optimizations": "all",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 11009,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "compatible-fp32",
+          "speechDurationMs": 10808.89,
+          "rtf": 3.351904702919372,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 70.26,
+            "gptMs": 11717.14,
+            "acousticMs": 21605.44,
+            "vocoderMs": 2741.55,
+            "totalMs": 36235.32,
+            "waveformMs": 36230.37,
+            "queueMs": 0.05,
+            "requestTotalMs": 36239.93
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": false,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "acoustic_steps": 25,
+            "cfg": 0.7,
+            "temperature": 0.8,
+            "top_p": 0.8,
+            "top_k": 30
+          }
+        },
+        "memory": {
+          "cudaMemoryAllocatedBytes": 3458922496,
+          "cudaMemoryReservedBytes": 4905238528,
+          "peakCudaMemoryAllocatedBytes": 4124345344,
+          "peakCudaMemoryReservedBytes": 4905238528
+        },
+        "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存"
+      }
+    },
+    "fixed-voice-bf16": {
+      "packSha256": "24b8251534f0efcf57f625a08c2ac4559139728af18173af1084674802773063",
+      "manifest": {
+        "conditioningAbi": "indextts2.5-reader-v1",
+        "displayName": "长素材融合成品",
+        "files": {
+          "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+          "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+          "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+          "conditioning.safetensors": "beebaa9a403fd5ea2f192571cf98faf6cc6ff04bb8a4275fa046251ff2666fdb"
+        },
+        "gender": "unknown",
+        "indexTtsVersion": "2.5",
+        "language": "zh",
+        "license": {
+          "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+          "model": "bilibili Model Use License",
+          "modelLicenseFile": "LICENSE",
+          "voiceRights": "provided-separately"
+        },
+        "provenance": {
+          "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+          "producerVersions": {
+            "librosa": "0.10.2.post1",
+            "torch": "2.8.0+cu128",
+            "torchaudio": "2.8.0+cu128",
+            "transformers": "4.52.1"
+          },
+          "profile": "fixed-voice-bf16",
+          "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+          "referenceSelection": {
+            "audioSha256": "87882ceb5db6fb00f78d68c4067f3603ef141d94487805aa7f7c588559323cb7",
+            "confirmedTarget": true,
+            "method": "speaker-mean-v1",
+            "primary": "r02",
+            "primarySha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+            "revision": "947d415380fbbb98335744be9529bd06f75d53d58e814be09da9e5d4f24fe6d9",
+            "segments": [
+              {
+                "end": 242.678,
+                "id": "r02",
+                "selected": true,
+                "sha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+                "start": 231.498
+              },
+              {
+                "end": 261.238,
+                "id": "r03",
+                "selected": true,
+                "sha256": "7a782f9ab1858243f06fae61d7cb6e70526364cb9fd4237d4dd20a7d67171f93",
+                "start": 251.05
+              },
+              {
+                "end": 366.774,
+                "id": "r04",
+                "selected": true,
+                "sha256": "1a43d32268811fd1e440668fe3d00496e6490b980d8f4507915fe0bfda18b972",
+                "start": 354.058
+              },
+              {
+                "end": 470.966,
+                "id": "r05",
+                "selected": true,
+                "sha256": "e6840c43a4e56105be3e9b793d4594bb688123e422150e2cea506d765acfab12",
+                "start": 461.322
+              }
+            ],
+            "sourceId": "dafbe08290bf4a729e46919fafb01d2f",
+            "sourceSha256": "eac8a5b76d6558782eed52a740cd1f66d3ff6837452b3611fed15cab5aecfac9"
+          },
+          "referenceSha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59"
+        },
+        "schemaVersion": 3,
+        "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+        "tensors": {
+          "base_emotion": {
+            "dtype": "bfloat16",
+            "shape": [
+              1,
+              1280
+            ]
+          },
+          "emotion_basis": {
+            "dtype": "float32",
+            "shape": [
+              8,
+              1280
+            ]
+          },
+          "prompt_condition": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              962,
+              512
+            ]
+          },
+          "ref_mel": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              80,
+              962
+            ]
+          },
+          "speaker_latent": {
+            "dtype": "bfloat16",
+            "shape": [
+              1,
+              1280
+            ]
+          },
+          "speaker_style": {
+            "dtype": "float32",
+            "shape": [
+              1,
+              192
+            ]
+          }
+        },
+        "voiceId": "bvec-mean-web-01"
+      },
+      "matchesPriorFullEncoding": {
+        "speaker_latent": true,
+        "base_emotion": true,
+        "speaker_style": true,
+        "emotion_basis": true,
+        "prompt_condition": true,
+        "ref_mel": true
+      },
+      "wavSha256": "5ad4c008bddc6842bdf43783de80e79f17811ccf0476ae5a76dd285c506896e0",
+      "downloadMatches": true,
+      "report": {
+        "voiceId": "bvec-mean-web-01",
+        "profile": "fixed-voice-bf16",
+        "packSha256": "24b8251534f0efcf57f625a08c2ac4559139728af18173af1084674802773063",
+        "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+        "runtimeManifestSha256": "f9c7356e66a482ba3af001763223876ceeeb42ca3e30ba78a76ee65f680e3df9",
+        "text": "会议安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+        "emotion": "base",
+        "speed": 1,
+        "seed": 17,
+        "modelLoadMs": 43399.64,
+        "modelReused": false,
+        "device": "cuda:0",
+        "cpuThreads": 4,
+        "allocator": "native",
+        "optimizations": "all",
+        "result": {
+          "sampleRate": 22050,
+          "durationMs": 10452,
+          "emotionMode": "base",
+          "emotionVector": null,
+          "rawEmotion": "base",
+          "seed": 17,
+          "profile": "fixed-voice-bf16",
+          "speechDurationMs": 10251.61,
+          "rtf": 3.8391686463937122,
+          "timings": {
+            "emotionMs": 0.0,
+            "prepareMs": 46.26,
+            "gptMs": 14901.81,
+            "acousticMs": 21612.11,
+            "vocoderMs": 2720.03,
+            "totalMs": 39362.58,
+            "waveformMs": 39357.66,
+            "queueMs": 0.04,
+            "requestTotalMs": 39368.3
+          },
+          "warnings": [],
+          "generationSettings": {
+            "do_sample": false,
+            "num_beams": 3,
+            "repetition_penalty": 10.0,
+            "length_penalty": 0.0,
+            "max_generate_length": 1500,
+            "num_return_sequences": 1,
+            "top_p": 0.8,
+            "top_k": 30,
+            "temperature": 0.8,
+            "acoustic_steps": 25,
+            "cfg": 0.7
+          }
+        },
+        "memory": {
+          "cudaMemoryAllocatedBytes": 2262474240,
+          "cudaMemoryReservedBytes": 4219469824,
+          "peakCudaMemoryAllocatedBytes": 2925528576,
+          "peakCudaMemoryReservedBytes": 4219469824
+        },
+        "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存"
+      }
+    }
+  },
+  "restartRestoreVerified": true,
+  "activeVoiceId": "bvec-mean-web-01",
+  "apiValidationEntryArchivedLocally": true
+}

@@ -88,20 +88,21 @@ class WorkbenchService:
         self.require("emotion")
         return self.validation.analyze(model_dir, mode, text, kind, rows, target, use_default, threshold, session_id)
 
-    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None, reference_selection=None):
+    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None, reference_selection=None, references=None):
         self.require("producer")
         if instance is None and (self.library.directory(voice_id) / "voice.json").exists():
             raise ValueError("音色 ID 已存在，请选择库中音色生成；更换参考音频请使用新 ID")
         path = None
         with self.gpu.use("producer"):
             try:
-                path, report = self.validation.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress)
+                kwargs = {"reference_selection": reference_selection, "references": references} if references is not None else {}
+                path, report = self.validation.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress, **kwargs)
                 copied_reference = next(Path(path).parent.glob("reference.*"))
                 installed = self.library.install(path, reference=copied_reference, expected_instance=instance,
-                                                 reference_selection=reference_selection)
+                                                 reference_selection=reference_selection, references=references)
                 if reference_selection is not None:
                     report["referenceSelection"] = copy.deepcopy(reference_selection)
-                    report["conditioningMethod"] = "primary-only-v1"
+                    report["conditioningMethod"] = reference_selection["method"]
                 return installed, report
             finally:
                 if path:
@@ -123,26 +124,56 @@ class WorkbenchService:
                 reference = Path(job) / source.name
                 shutil.copyfile(source, reference)
                 record = copy.deepcopy(record)
+                references = None
+                if record.get("referenceSelection", {}).get("method") == "speaker-mean-v1":
+                    references = {}
+                    for seg in record["referenceSelection"]["segments"]:
+                        stored = self.library.directory(voice_id) / "references" / (seg["id"] + ".wav")
+                        target = Path(job) / (seg["id"] + ".wav")
+                        shutil.copyfile(stored, target)
+                        references[seg["id"]] = str(target)
             return self.build(reference, voice_id, record["displayName"], record["gender"], profile,
                               device, model_dir, session_id, progress, instance=record["instance"],
-                              reference_selection=record.get("referenceSelection"))
+                              reference_selection=record.get("referenceSelection"), references=references)
 
     def build_selection(self, selection, voice_id, name, gender, profile, device, model_dir, session_id, progress=None):
         self.require("producer")
         from .voicepack.provenance import sha256_file
         fixed = self.materials.selection(selection["sourceId"], selection["revision"],
                                         confirmed=selection.get("confirmedTarget") is True)
+        method = selection.get("method")
+        if method not in {"primary-only-v1", "speaker-mean-v1"}:
+            raise ValueError("未知参考构建方法")
+        if method == "speaker-mean-v1" and len(fixed["segments"]) < 2:
+            raise ValueError("身份融合至少需要两个不同片段")
+        fixed["method"] = method
         if fixed != selection:
             raise ValueError("参考选择快照与保存记录不一致")
-        audio = self.materials.directory(fixed["sourceId"])/"audio.wav"
+        directory = self.materials.directory(fixed["sourceId"])
+        if method == "speaker-mean-v1":
+            material = self.materials.record(fixed["sourceId"])
+            if not material.get("original"):
+                raise ValueError("融合素材缺少原文件记录")
+            original = (directory / material["original"]).resolve()
+            if original.parent != directory or sha256_file(original) != fixed["sourceSha256"]:
+                raise ValueError("原始素材完整性检查失败")
+        audio = directory/"audio.wav"
         if sha256_file(audio) != fixed["audioSha256"]:
             raise ValueError("素材音轨完整性检查失败")
         with tempfile.TemporaryDirectory(dir=self._jobs) as job:
             primary = next(s for s in fixed["segments"] if s["id"] == fixed["primary"])
             reference = self.materials.crop(fixed["sourceId"], primary["start"], primary["end"], Path(job)/"primary.wav")
             fixed["primarySha256"] = sha256_file(reference)
+            references = None
+            if method == "speaker-mean-v1":
+                references = {}
+                for seg in fixed["segments"]:
+                    cropped = self.materials.crop(fixed["sourceId"], seg["start"], seg["end"], Path(job)/(seg["id"]+".wav"))
+                    seg["sha256"] = sha256_file(cropped)
+                    references[seg["id"]] = cropped
+            kwargs = {"references": references} if references is not None else {}
             return self.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress,
-                              reference_selection=fixed)
+                              reference_selection=fixed, **kwargs)
 
     def cancel(self, session_id):
         if self._audition_service is None:

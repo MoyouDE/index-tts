@@ -100,6 +100,7 @@ class VoicePackBuilder:
         reference_audio: str | Path,
         metadata: Mapping[str, Any],
         output_path: str | Path,
+        *, reference_selection=None, references=None,
     ) -> Path:
         reference = Path(reference_audio).resolve()
         if not reference.is_file():
@@ -110,12 +111,21 @@ class VoicePackBuilder:
         from .schema import validate_identity
         validate_identity(voice_id, display_name, gender)
 
+        if reference_selection is not None:
+            if self.profile is None:
+                raise ValueError("参考选择制包必须指定精度")
+            from .selection import validate_selection, fuse_selected
+            validate_selection(reference_selection, references, reference)
+
         tts = self._get_tts()
         if self.profile == "fixed-voice-bf16":
             import torch
             if getattr(tts, "dtype", None) != torch.bfloat16:
                 raise ValueError("BF16 pack requires actual BF16 reference precomputation")
         tensors = tts.extract_voice_conditioning(str(reference), verbose=False)
+        if reference_selection is not None:
+            if reference_selection["method"] == "speaker-mean-v1":
+                tensors = fuse_selected(tts, tensors, references, reference_selection["primary"])
         fingerprint = self.source_model_fingerprint()
         manifest = {
             "schemaVersion": SCHEMA_VERSION,
@@ -148,6 +158,10 @@ class VoicePackBuilder:
                 "producerVersions": {name: version(name) for name in
                                      ("torch", "torchaudio", "librosa", "transformers")},
             }
+        if reference_selection is not None:
+            import copy
+            manifest["schemaVersion"] = 3
+            manifest["provenance"]["referenceSelection"] = copy.deepcopy(reference_selection)
         root = Path(__file__).resolve().parents[2]
         upstream_disclaimer = (root / "DISCLAIMER").read_text(encoding="utf-8")
         derivative = (

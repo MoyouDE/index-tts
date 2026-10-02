@@ -65,14 +65,14 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         "files",
         "license",
     }
-    if manifest.get("schemaVersion") == 2:
+    if manifest.get("schemaVersion") in (2, 3):
         required.add("provenance")
     missing = sorted(required - set(manifest))
     if missing:
         raise VoicePackSchemaError(f"manifest 缺少字段: {', '.join(missing)}")
     if set(manifest) - required:
         raise VoicePackSchemaError(f"manifest 含未知字段: {', '.join(sorted(set(manifest) - required))}")
-    if manifest["schemaVersion"] not in (SCHEMA_VERSION, 2):
+    if manifest["schemaVersion"] not in (SCHEMA_VERSION, 2, 3):
         raise VoicePackSchemaError(f"不支持的 schemaVersion: {manifest['schemaVersion']!r}")
     if not isinstance(manifest["voiceId"], str) or not _VOICE_ID.fullmatch(manifest["voiceId"]):
         raise VoicePackSchemaError("voiceId 必须为 1-64 位字母、数字、点、下划线或连字符")
@@ -107,11 +107,13 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
             raise VoicePackSchemaError(f"张量 {name} 的 dtype 无效: {spec['dtype']!r}")
 
     _validate_fixed_tensor_shapes(tensors)
-    if manifest["schemaVersion"] == 2:
+    if manifest["schemaVersion"] in (2, 3):
         from .provenance import PREPROCESS_FINGERPRINT
         provenance = manifest["provenance"]
         keys = {"profile", "referenceSha256", "referenceEncoderFingerprint",
                 "preprocessFingerprint", "producerVersions"}
+        if manifest["schemaVersion"] == 3:
+            keys.add("referenceSelection")
         if not isinstance(provenance, dict) or set(provenance) != keys:
             raise VoicePackSchemaError("Invalid voice provenance")
         if provenance["profile"] not in {"compatible-fp32", "fixed-voice-bf16"}:
@@ -123,6 +125,9 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
             raise VoicePackSchemaError("Incompatible reference preprocessing")
         if not isinstance(provenance["producerVersions"], dict):
             raise VoicePackSchemaError("Invalid producer versions")
+        if manifest["schemaVersion"] == 3:
+            from .selection import validate_selection_record
+            validate_selection_record(provenance["referenceSelection"], provenance["referenceSha256"])
         for name, spec in tensors.items():
             expected = ("bfloat16" if provenance["profile"] == "fixed-voice-bf16"
                         and name in {"speaker_latent", "base_emotion"} else "float32")

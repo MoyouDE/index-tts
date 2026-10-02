@@ -30,8 +30,8 @@ class ValidationService:
     def session_dir(self, session_id):
         return self.files.session_dir(session_id)
 
-    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None):
-        return self.producer.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress)
+    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, **kwargs):
+        return self.producer.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress, **kwargs)
 
     def inspect(self, uploaded, model_dir, session_id):
         return self.producer.inspect(uploaded, model_dir, session_id)

@@ -41,11 +41,11 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
         overlong=[s["id"] for s in chosen if s["end"]-s["start"]>15+1e-6]
         text=(f"素材 {record['durationSeconds']:.2f} 秒 · 检测语音 {record['speechSeconds']:.2f} 秒 · "
               f"选中 {seconds:.2f} 秒（{len(chosen)} 段）\n"
-              f"主参考：{record['primary'] or '尚未指定'}；正式制包仅使用主参考。")
+              f"主参考：{record['primary'] or '尚未指定'}；单段模式仅使用主参考，融合模式使用所有选中片段。")
         return text+("\n请拆分超长片段："+", ".join(overlong) if overlong else "")
 
     with gr.Accordion("长视频／录音素材整理",open=True):
-        gr.Markdown("导入完整素材并选择目标人物片段。当前正式制包仅使用你指定的主参考，其他片段保留用于多段验证；不会默认取长素材开头。")
+        gr.Markdown("导入完整素材并选择目标人物片段。单段模式使用主参考；可选身份等权融合使用所有选中片段，声学提示与基础情感仍固定为主参考；不会默认取长素材开头。")
         media = gr.File(label="长素材（音频或视频）",type="filepath")
         import_button = gr.Button("导入并自动分段")
         with gr.Row():
@@ -53,7 +53,7 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
             refresh = gr.Button("刷新素材列表")
         original_audio = gr.Audio(label="完整音轨回放",interactive=False)
         details = gr.Textbox(label="素材与选择统计",lines=3,interactive=False,
-                             info="检测语音区间包含正常短停顿；其他选中片段尚未参与融合。")
+                             info="检测语音区间包含正常短停顿；每个片段最长 15 秒；融合不自动删除内部空白。")
         rows = gr.Dataframe(headers=["片段 ID","起点（秒）","终点（秒）","选中"],
                             datatype=["str","number","number","bool"],type="array",interactive=True,
                             col_count=(4,"fixed"),label="分段编辑（调整后请保存；每个选中片段最多 15 秒）")
@@ -68,7 +68,8 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
             merge = gr.Button("与下一片段合并")
         save = gr.Button("保存分段与选择")
         confirmed = gr.Checkbox(label="我已确认选中片段属于同一目标人物，并排除不需要的声音",value=False)
-        make = gr.Button("使用主参考生成音色包",variant="primary")
+        method = gr.Radio([("单段主参考", "primary-only-v1"), ("多段身份等权融合（待成品验收）", "speaker-mean-v1")], value="primary-only-v1", label="参考条件构建方法")
+        make = gr.Button("按所选方法生成音色包",variant="primary")
         status = gr.Textbox(label="素材操作结果",interactive=False)
         revision = gr.State(None)
 
@@ -116,11 +117,12 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
     save.click(save_selection,[source,rows,primary,revision],[revision,details,status,confirmed])
 
     @ui_errors
-    def build_material(source_id, values, main, rev, approved, *args, progress=gr.Progress()):
+    def build_material(source_id, values, main, rev, approved, construction, *args, progress=gr.Progress()):
         record=materials.record(source_id)
         if values != table_rows(record) or main != record["primary"]:
             raise ValueError("分段或主参考尚未保存，请先保存修改")
         selection=materials.selection(source_id,rev,confirmed=approved)
+        selection["method"] = construction
         return generate(selection,*args,progress=progress)
-    built=make.click(build_material,[source,rows,primary,revision,confirmed,*inputs],outputs,concurrency_limit=None)
+    built=make.click(build_material,[source,rows,primary,revision,confirmed,method,*inputs],outputs,concurrency_limit=None)
     return SimpleNamespace(source=source,choices=choices,built=built)
