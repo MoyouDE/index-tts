@@ -104,12 +104,12 @@ def test_workflow_encoding_failure_can_retry_and_queued_settings_are_fixed(mater
     try:
         sid = uuid.uuid4().hex
         prepared, revision, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            record["revision"], True, "auto", "Voice", "unknown", "compatible-fp32", "cpu", sid)
+            record["revision"], True, "auto", "b", 9., 18., "Voice", "unknown", "compatible-fp32", "cpu", sid)
         with pytest.raises(Exception, match="model unavailable"):
             callbacks["generate_snapshot"](prepared)
         # A retry uses the revision already returned before encoding failed.
         retry, _, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            revision, True, "auto", "Voice", "unknown", "compatible-fp32", "cpu", sid)
+            revision, True, "auto", "b", 9., 18., "Voice", "unknown", "compatible-fp32", "cpu", sid)
         result = callbacks["generate_snapshot"](retry)
         assert result[0] == "voice.ivp"
         selected, profile = callbacks["select_generated"](result[1])
@@ -117,6 +117,55 @@ def test_workflow_encoding_failure_can_retry_and_queued_settings_are_fixed(mater
         assert captured[0][0] == captured[1][0] == prepared["selection"]
         assert captured[0][1][3:5] == ("compatible-fp32", "cpu")
         assert captured[0][1][0] != captured[1][1][0]  # distinct automatic voice IDs
+    finally:
+        app.workbench.close()
+
+
+def test_manual_ranges_add_adjust_and_keep_excluded_history():
+    from indextts.material_web import keep_range
+    values = [["a", 1., 4., True], ["excluded", 5., 6., False]]
+    updated, active = keep_range(values, "__new__", 7., 9., 20.)
+    assert updated[-1] == [active, 7., 9., True]
+    assert values == [["a", 1., 4., True], ["excluded", 5., 6., False]]
+    adjusted, same = keep_range(updated, active, 5., 8., 20.)
+    assert same == active and adjusted[-1] == [active, 5., 8., True]
+    assert adjusted[1] == values[1]  # excluded ranges do not block an intentional replacement
+
+
+@pytest.mark.parametrize("start,end,error", [(-1, 4, "范围"), (4, 4, "起点"),
+    (1, 21, "范围"), (0, 16, "15"), (float("nan"), 4, "范围"), (3, 8, "重叠")])
+def test_invalid_manual_range_does_not_change_draft(start, end, error):
+    from indextts.material_web import keep_range
+    values = [["a", 1., 4., True]]
+    with pytest.raises(ValueError, match=error):
+        keep_range(values, "__new__", start, end, 20.)
+    assert values == [["a", 1., 4., True]]
+
+
+def test_intelligent_suggestions_leave_saved_manual_selection_unchanged(material):
+    service, record = material
+    (service.directory(record["sourceId"])/"vad.wav").write_bytes(b"test")
+    class Detector:
+        def detect(self, *args):
+            return {"segments": [{"id": "suggested", "start": 2., "end": 4., "selected": True}]}
+    service._detector = Detector()
+    suggestions = service.suggest_segments(record["sourceId"])
+    assert suggestions["segments"][0]["id"] == "suggested"
+    assert service.record(record["sourceId"]) == record
+
+
+def test_unretained_range_cannot_be_used_for_generation(material, tmp_path):
+    from indextts.validation_web import create_app
+    service, record = material
+    record["name"] = "reference.wav"
+    write_json(service.directory(record["sourceId"])/"material.json", record)
+    app = create_app(modules="producer", workspace_dir=service.root.parent, output_dir=tmp_path/"out")
+    prepare = next(f.fn for f in app.fns.values() if f.fn and f.fn.__name__ == "prepare")
+    try:
+        with pytest.raises(Exception, match="保留"):
+            prepare(record["sourceId"], rows(record), "a", record["revision"], True, "auto",
+                    "a", 2., 7., "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
+        assert service.record(record["sourceId"]) == record
     finally:
         app.workbench.close()
 

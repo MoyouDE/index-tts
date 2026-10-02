@@ -63,6 +63,18 @@ class MaterialService:
             return [self.record(p.parent.name) for p in sorted(self.root.glob("*/material.json"))
                     if re.fullmatch(r"[0-9a-f]{32}",p.parent.name)]
 
+    def suggest_segments(self, source_id, progress=None):
+        """Return a fresh editing draft; never overwrite an existing selection."""
+        audio = self.directory(source_id)/"vad.wav"
+        if not audio.is_file():
+            raise ValueError("素材缺少 VAD 音轨，请重新导入素材")
+        with self.lock:
+            if self._detector is None:
+                from .material_vad import SileroVad
+                self._detector = SileroVad()
+            detector = self._detector
+        return detector.detect(audio, progress)
+
     def import_media(self, uploaded, progress=None):
         if not uploaded or not Path(uploaded).is_file():
             raise ValueError("请上传本地视频或音频")
