@@ -314,9 +314,9 @@ def make_blind(output,partial=False):
                     sf.write(blind/f"{label}-seed-{seed}-text-{text_index}.wav",wave*gain,rate)
                     audio_info.append({"label":label,"startSeconds":offset,"durationSeconds":len(wave)/rate})
                     pieces.extend([wave*gain,np.zeros(rate,dtype=np.float32)]);offset+=len(wave)/rate+1
-                stem=f"{group}-seed-{seed}-text-{text_index}"
-                sf.write(blind/(stem+".wav"),np.concatenate(pieces),rate)
-                save(blind/(stem+".json"),audio_info)
+                montage_name=f"{group}-seed-{seed}-text-{text_index}"
+                sf.write(blind/(montage_name+".wav"),np.concatenate(pieces),rate)
+                save(blind/(montage_name+".json"),audio_info)
     save(output/(stem+"-key.json"),mapping)
     save(output/(stem+"-info.json"),{"availableGroups":available,"identityLabels":"U01 onward" if partial else "V01 onward",
          "pauseLabels":"Q01 onward" if partial else "P01 onward","partial":partial,"labels":list(mapping),

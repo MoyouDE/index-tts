@@ -82,3 +82,16 @@ def test_timeout_stops_owned_interpreter_children(tmp_path):
     assert pid_file.exists()
     pid = int(pid_file.read_text())
     assert not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+
+
+@pytest.mark.parametrize("partial,stem,label", [(False, "blind", "V01"), (True, "blind-partial", "U01")])
+def test_blind_key_has_stable_name_separate_from_montage(tmp_path, monkeypatch, partial, stem, label):
+    from tools import reference_fusion_experiment as experiment
+    config = {"cases": ["baseline"], "seeds": [17], "texts": ["test"]}
+    monkeypatch.setattr(experiment, "checked_configuration", lambda output: config)
+    (tmp_path / "baseline").mkdir()
+    sf.write(tmp_path / "baseline/seed-17-text-1.wav", np.ones(2205) * .1, 22050)
+    assert experiment.make_blind(tmp_path, partial) == ["identity"]
+    assert json.loads((tmp_path / (stem + "-key.json")).read_text()) == {label: "baseline"}
+    assert (tmp_path / stem / "identity-seed-17-text-1.wav").is_file()
+    assert not (tmp_path / "identity-seed-17-text-1-key.json").exists()
