@@ -1,0 +1,185 @@
+{
+  "voiceId": "other-material-no-s002",
+  "profile": "compatible-fp32",
+  "packSha256": "6c1b08353b6473b556dd03ab11a0ec30596859185559be7791df1552bf5a81d2",
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "runtimeManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967",
+  "text": "会议安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+  "emotion": "base",
+  "speed": 1,
+  "seed": 17,
+  "modelLoadMs": 57301.16,
+  "modelReused": false,
+  "device": "cuda:0",
+  "cpuThreads": 4,
+  "allocator": "native",
+  "optimizations": "all",
+  "result": {
+    "sampleRate": 22050,
+    "durationMs": 8536,
+    "emotionMode": "base",
+    "emotionVector": null,
+    "rawEmotion": "base",
+    "seed": 17,
+    "profile": "compatible-fp32",
+    "speechDurationMs": 8335.96,
+    "rtf": 5.0204055477726826,
+    "timings": {
+      "emotionMs": 0.0,
+      "prepareMs": 95.11,
+      "gptMs": 10899.83,
+      "acousticMs": 28144.1,
+      "vocoderMs": 2707.57,
+      "totalMs": 41862.95,
+      "waveformMs": 41849.92,
+      "queueMs": 0.06,
+      "requestTotalMs": 41867.84
+    },
+    "warnings": [],
+    "generationSettings": {
+      "do_sample": false,
+      "num_beams": 3,
+      "repetition_penalty": 10.0,
+      "length_penalty": 0.0,
+      "max_generate_length": 1500,
+      "num_return_sequences": 1,
+      "acoustic_steps": 25,
+      "cfg": 0.7,
+      "temperature": 0.8,
+      "top_p": 0.8,
+      "top_k": 30
+    }
+  },
+  "memory": {
+    "cudaMemoryAllocatedBytes": 3460430848,
+    "cudaMemoryReservedBytes": 5412749312,
+    "peakCudaMemoryAllocatedBytes": 4127921664,
+    "peakCudaMemoryReservedBytes": 5412749312
+  },
+  "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存",
+  "waveformSha256": "fabcd0b5fe9cb352faf3a8dd0c158498a242e1d9c10916e90036d11db05bb467",
+  "manifest": {
+    "conditioningAbi": "indextts2.5-reader-v1",
+    "displayName": "另一批素材排除背景音乐片段",
+    "files": {
+      "DERIVATIVE_DISCLAIMER.txt": "8e5f36849e42d0e0e94411ae862f5972ff300ea2b83ba22aa4c3e821948df055",
+      "LICENSE": "53875532237e0a97b17a41721556ff57e93193fc566e48c3a0febe6e35bb5343",
+      "LICENSE_ZH.txt": "366175ecf329274358801b8365922677c52f25e643dcf00f0bc15857b5b2777f",
+      "conditioning.safetensors": "5ec420cff07d9b28d5e921303a493b9636f5d1fbe224a3678e1d3a86eba2c907"
+    },
+    "gender": "unknown",
+    "indexTtsVersion": "2.5",
+    "language": "zh",
+    "license": {
+      "derivativeDisclaimerFile": "DERIVATIVE_DISCLAIMER.txt",
+      "model": "bilibili Model Use License",
+      "modelLicenseFile": "LICENSE",
+      "voiceRights": "provided-separately"
+    },
+    "provenance": {
+      "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+      "producerVersions": {
+        "librosa": "0.10.2.post1",
+        "torch": "2.8.0+cu128",
+        "torchaudio": "2.8.0+cu128",
+        "transformers": "4.52.1"
+      },
+      "profile": "compatible-fp32",
+      "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+      "referenceSelection": {
+        "audioSha256": "557a58814b9cca6e73b9965d897e38523d224989649df316d6f9dbb56e1a2e86",
+        "confirmedTarget": true,
+        "method": "speaker-mean-v1",
+        "primary": "s003",
+        "primarySha256": "7caf4e5871d72dc1adaa8e0d550ae9c5d5db6123c176f8a368c5246d1e507355",
+        "revision": "a8d65732735250e96160bb43dd5c188fe9804e470c0aaf12d0d97ab064cb89e7",
+        "segments": [
+          {
+            "end": 32.768,
+            "id": "s003",
+            "selected": true,
+            "sha256": "7caf4e5871d72dc1adaa8e0d550ae9c5d5db6123c176f8a368c5246d1e507355",
+            "start": 18.72
+          },
+          {
+            "end": 42.806,
+            "id": "s006",
+            "selected": true,
+            "sha256": "3d5ac6bfb644a1da9fd78e1f1994cef1718f16d3c40373cb17076c6328e832d9",
+            "start": 39.53
+          },
+          {
+            "end": 54.838,
+            "id": "s008",
+            "selected": true,
+            "sha256": "924b2d1c4f6ad3f7e3497e391b03477a9438a07d8c201e23819df40643a1b465",
+            "start": 46.794
+          },
+          {
+            "end": 73.494,
+            "id": "s012",
+            "selected": true,
+            "sha256": "fa40463ced994b84c7eb37a9b689dfe7c80ec3d3bddac4f20c2a0e6bac8b3c6e",
+            "start": 70.474
+          }
+        ],
+        "sourceId": "cbaca0ce93cc41e1bd42c5daa09c6488",
+        "sourceSha256": "8529b21758fe996e9c94408a971d6b0b810f3e5b51b76f113b9b053fa3b08610"
+      },
+      "referenceSha256": "7caf4e5871d72dc1adaa8e0d550ae9c5d5db6123c176f8a368c5246d1e507355"
+    },
+    "schemaVersion": 3,
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "tensors": {
+      "base_emotion": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1280
+        ]
+      },
+      "emotion_basis": {
+        "dtype": "float32",
+        "shape": [
+          8,
+          1280
+        ]
+      },
+      "prompt_condition": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1209,
+          512
+        ]
+      },
+      "ref_mel": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          80,
+          1209
+        ]
+      },
+      "speaker_latent": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          1280
+        ]
+      },
+      "speaker_style": {
+        "dtype": "float32",
+        "shape": [
+          1,
+          192
+        ]
+      }
+    },
+    "voiceId": "other-material-no-s002"
+  },
+  "diagnosticOnly": true,
+  "controlCheck": "Original unmodified text, model, profile, seed and all effective generation settings identical; only reference conditioning changed.",
+  "referenceChoice": "BV1GARFBXEwe: s003 primary; s003/s006/s008/s012 equal mean; excluded s002 after earlier BGM feedback.",
+  "acceptability": "pending-user-listening"
+}
