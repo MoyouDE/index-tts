@@ -1,0 +1,63 @@
+{
+  "voiceId": "bvec-mean-web-01",
+  "profile": "compatible-fp32",
+  "packSha256": "335b42f32a2a1a3df209efca1e6dea0faa9da889170c29bb9e112e4664336660",
+  "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+  "runtimeManifestSha256": "1e168aa6442a903618b68dcdf8af881492cbee167a5d7d06efb41ff26a8ac967",
+  "text": "会议，安排在十月十二日下午三点半，请准备两份材料。到达之后，先核对姓名，再按照顺序入场。",
+  "emotion": "base",
+  "speed": 1,
+  "seed": 17,
+  "modelLoadMs": 63036.8,
+  "modelReused": false,
+  "device": "cuda:0",
+  "cpuThreads": 4,
+  "allocator": "native",
+  "optimizations": "all",
+  "result": {
+    "sampleRate": 22050,
+    "durationMs": 11729,
+    "emotionMode": "base",
+    "emotionVector": null,
+    "rawEmotion": "base",
+    "seed": 17,
+    "profile": "compatible-fp32",
+    "speechDurationMs": 11528.71,
+    "rtf": 7.112369111711635,
+    "timings": {
+      "emotionMs": 0.0,
+      "prepareMs": 120.77,
+      "gptMs": 19385.96,
+      "acousticMs": 39946.98,
+      "vocoderMs": 22539.67,
+      "totalMs": 82006.74,
+      "waveformMs": 81996.42,
+      "queueMs": 0.07,
+      "requestTotalMs": 82012.52
+    },
+    "warnings": [],
+    "generationSettings": {
+      "do_sample": false,
+      "num_beams": 3,
+      "repetition_penalty": 10.0,
+      "length_penalty": 0.0,
+      "max_generate_length": 1500,
+      "num_return_sequences": 1,
+      "acoustic_steps": 25,
+      "cfg": 0.7,
+      "temperature": 0.8,
+      "top_p": 0.8,
+      "top_k": 30
+    }
+  },
+  "memory": {
+    "cudaMemoryAllocatedBytes": 3457759232,
+    "cudaMemoryReservedBytes": 4926210048,
+    "peakCudaMemoryAllocatedBytes": 4127863296,
+    "peakCudaMemoryReservedBytes": 4926210048
+  },
+  "memoryScope": "PyTorch 进程当前分配/保留及进程生命周期峰值；不是 WDDM dedicated 或系统总内存",
+  "diagnosticOnly": true,
+  "changedInput": "One comma between 会议 and 安排; unchanged voice, seed and generation settings.",
+  "waveformSha256": "58de54643c7b18e519d096e49426757ba8053f02c4499073a42b8d482495600c"
+}

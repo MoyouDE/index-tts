@@ -9,7 +9,11 @@
   "alternateSeed": 29,
   "alternateWaveformSha256": "51824aad2ff67d2ed3965ee241b0378a339f36a09b6ac459192389141035e0fc",
   "alternateSource": "Existing controlled mean-4 experiment, text 3, seed 29; no fresh parameter search.",
-  "cause": "Not established; no attribution to identity fusion from a single pronunciation complaint.",
+  "cause": "User reports word-boundary coarticulation; frontend versus generator cause not established.",
   "nextReview": "Only judge whether the articulation is acceptable; no candidate ranking.",
-  "qualityAccepted": false
+  "qualityAccepted": false,
+  "followUpFeedback": "还是不清楚 听起来是议安连读变成了烟",
+  "alternateSeed29Accepted": false,
+  "boundaryDiagnostic": "Same seed 17, all effective generation settings and pack hash verified identical; one comma added between 会议 and 安排.",
+  "diagnosticVerdict": "pending-user-listening"
 }
