@@ -242,7 +242,9 @@ def synthesize(output,case,resume=False):
     destination=output/case;destination.mkdir(exist_ok=True)
     raw=load_file(str(output/(case+".safetensors")))
     started=time.perf_counter()
+    print(f"Loading runtime for {case}",flush=True)
     runtime=ReaderRuntime(config["readerModels"],[],None,cache_dir=destination/"cache",optimizations=InferenceOptimizations())
+    print(f"Runtime loaded in {time.perf_counter()-started:.2f}s",flush=True)
     if runtime.profile != "compatible-fp32": raise ValueError("首轮实验必须使用 FP32 裁剪模型")
     if runtime.source_fingerprint!=read(output/"encoding.json")["sourceModelFingerprint"]: raise ValueError("模型指纹不同")
     pack=VoicePack(output/(case+".safetensors"),{"voiceId":"experiment-"+case},raw)
@@ -255,6 +257,7 @@ def synthesize(output,case,resume=False):
         for seed in config["seeds"]:
             for i,text in enumerate(config["texts"],1):
                 if (seed,i) in done: continue
+                print(f"Start {case} seed {seed} text {i}",flush=True)
                 torch.cuda.reset_peak_memory_stats()
                 result=runtime.synthesize(text,pack.voice_id,emotion="base",seed=seed,_voice_pack=pack,
                                           generation_settings=config["generationSettings"])
@@ -276,17 +279,22 @@ def synthesize(output,case,resume=False):
         del runtime
 
 
-def make_blind(output):
+def make_blind(output,partial=False):
     import numpy as np
     import soundfile as sf
     config=checked_configuration(output)
-    blind=output/"blind";blind.mkdir(exist_ok=True)
+    stem="blind-partial" if partial else "blind"
+    blind=output/stem;blind.mkdir(exist_ok=True)
     mapping={};available=[]
     groups={"identity":("V",[c for c in config["cases"] if not c.startswith("pause-")]),
             "pause":("P",[c for c in config["cases"] if c.startswith("pause-")])}
     for group,(prefix,cases) in groups.items():
-        if not cases or any(not (output/c/f"seed-{seed}-text-{i}.wav").is_file()
-                            for c in cases for seed in config["seeds"] for i in range(1,len(config["texts"])+1)):
+        ready=[c for c in cases if all((output/c/f"seed-{seed}-text-{i}.wav").is_file()
+                            for seed in config["seeds"] for i in range(1,len(config["texts"])+1))]
+        if partial:
+            cases=ready
+            prefix="U" if group=="identity" else "Q"
+        if not cases or (not partial and len(ready)!=len(cases)):
             continue
         order=cases.copy();random.Random(917).shuffle(order)
         labels={f"{prefix}{i+1:02d}":case for i,case in enumerate(order)}
@@ -309,13 +317,14 @@ def make_blind(output):
                 stem=f"{group}-seed-{seed}-text-{text_index}"
                 sf.write(blind/(stem+".wav"),np.concatenate(pieces),rate)
                 save(blind/(stem+".json"),audio_info)
-    save(output/"blind-key.json",mapping)
-    save(output/"blind-info.json",{"availableGroups":available,"identityLabels":"V01 onward",
-         "pauseLabels":"P01 onward","subjectiveVerdict":"pending-user-listening"})
+    save(output/(stem+"-key.json"),mapping)
+    save(output/(stem+"-info.json"),{"availableGroups":available,"identityLabels":"U01 onward" if partial else "V01 onward",
+         "pauseLabels":"Q01 onward" if partial else "P01 onward","partial":partial,"labels":list(mapping),
+         "subjectiveVerdict":"pending-user-listening"})
     return available
 
 
-def summarize(output):
+def summarize(output,partial=False):
     torch=initialize()
     import numpy as np
     from safetensors.torch import load_file
@@ -327,12 +336,16 @@ def summarize(output):
     camp.eval()
     styles=load_file(str(output/"styles.safetensors"))
     held=[styles[sid] for sid in config["heldOutIds"]]
-    results=[]
+    results=[];missing=[]
     for case in config["cases"]:
         path=output/case/"synthesis.json"
-        if not path.exists(): raise ValueError("实验组尚未完成，不能生成完整技术报告")
+        if not path.exists():
+            if partial: missing.append({"case":case,"completedSamples":0});continue
+            raise ValueError("实验组尚未完成，不能生成完整技术报告")
         report=read(path)
         expected={(seed,i) for seed in config["seeds"] for i in range(1,len(config["texts"])+1)}
+        if partial and len(report["samples"])<len(expected):
+            missing.append({"case":case,"completedSamples":len(report["samples"])});continue
         if {(s["seed"],s["textIndex"]) for s in report["samples"]} != expected or len(report["samples"]) != len(expected):
             raise ValueError("实验组输出不完整，不能生成成功报告")
         embeddings=[]
@@ -343,11 +356,32 @@ def summarize(output):
         report["meanHeldOutCosine"]=float(np.mean([s["heldOutCosine"] for s in report["samples"]]))
         report["meanCrossTextCosine"]=float(np.mean([F.cosine_similarity(a,b).item() for i,a in enumerate(embeddings) for j,b in enumerate(embeddings) if i<j and report["samples"][i]["seed"]==report["samples"][j]["seed"]]))
         results.append(report)
-    make_blind(output)
-    save(output/"results.json",{"configuration":config,"results":results,"subjectiveVerdict":"pending-user-listening",
+    make_blind(output,partial)
+    save(output/("partial-summary.json" if partial else "results.json"),{"configuration":config,"results":results,
+         "partial":partial,"incompleteCases":missing,"subjectiveVerdict":"pending-user-listening",
          "formalFusionEnabled":False,"metricLimit":"Same CAMPPlus family as conditioning; first 15 seconds per generated sample; auxiliary only, not independent subjective quality.",
          "memoryScope":"PyTorch allocated/reserved in synthesis child only; RSS is process memory, not whole machine."})
     print(json.dumps([{k:r[k] for k in ["case","meanHeldOutCosine","meanCrossTextCosine"]} for r in results]))
+
+
+def isolated_step(command, log, timeout=1800):
+    """A Windows venv launcher may have a real interpreter child; stop both."""
+    import psutil
+    with log.open("w",encoding="utf-8") as stream:
+        process=subprocess.Popen(command,stdout=stream,stderr=subprocess.STDOUT,
+            env={**os.environ,"PYTHONUTF8":"1"},creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
+        try:
+            return process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try: children=psutil.Process(process.pid).children(recursive=True)
+            except psutil.NoSuchProcess: children=[]
+            process.kill()
+            for child in reversed(children):
+                try: child.kill()
+                except psutil.NoSuchProcess: pass
+            process.wait(timeout=10)
+            psutil.wait_procs(children,timeout=10)
+            return "timeout"
 
 
 def run(output,resume=False):
@@ -372,12 +406,7 @@ def run(output,resume=False):
         log=output/(f"{stage}-{case or 'all'}{'-resume' if resume else ''}.log")
         began=time.perf_counter()
         print(f'Start isolated {stage} {case or ""}',flush=True)
-        try:
-            with log.open("w",encoding="utf-8") as stream:
-                completed=subprocess.run(command,stdout=stream,stderr=subprocess.STDOUT,timeout=1800,
-                    env={**os.environ,"PYTHONUTF8":"1"},creationflags=subprocess.CREATE_NO_WINDOW if os.name=="nt" else 0)
-            code=completed.returncode
-        except subprocess.TimeoutExpired: code="timeout"
+        code=isolated_step(command,log)
         runs.append({"stage":stage,"case":case,"returncode":code,"seconds":time.perf_counter()-began,"log":log.name})
         write_json(output/"isolated-runs.json",runs)
         if code!=0: raise RuntimeError(f"隔离实验失败 {stage}/{case}: {code}，详见 {log}")
@@ -400,13 +429,14 @@ def main():
     parser.add_argument("--reader-model-dir")
     parser.add_argument("--case")
     parser.add_argument("--resume",action="store_true",help="校验已保存的音频和编码哈希，仅补齐剩余合成样本")
+    parser.add_argument("--partial",action="store_true",help="仅汇总和编号已经完整完成的实验组，明确标注未完成组")
     args=parser.parse_args()
     if args.stage=="prepare": prepare(args)
     elif args.stage=="run": run(Path(args.output).resolve(),args.resume)
     elif args.stage=="encode": encode(Path(args.output).resolve())
     elif args.stage=="synthesize": synthesize(Path(args.output).resolve(),args.case,args.resume)
-    elif args.stage=="blind": print(json.dumps(make_blind(Path(args.output).resolve())))
-    else: summarize(Path(args.output).resolve())
+    elif args.stage=="blind": print(json.dumps(make_blind(Path(args.output).resolve(),args.partial)))
+    else: summarize(Path(args.output).resolve(),args.partial)
 
 
 if __name__=="__main__": main()

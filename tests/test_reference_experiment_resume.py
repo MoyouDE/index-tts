@@ -68,3 +68,17 @@ def test_rejects_invalid_sample_records(snapshot, change):
     path.write_text(json.dumps(report), encoding="utf-8")
     with pytest.raises(ValueError):
         resume_report(root, "baseline", config)
+
+
+def test_timeout_stops_owned_interpreter_children(tmp_path):
+    import sys
+    import psutil
+    from tools.reference_fusion_experiment import isolated_step
+    pid_file = tmp_path / "child.pid"
+    code = ("import subprocess,sys,time;from pathlib import Path;"
+            "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+            f"Path({str(pid_file)!r}).write_text(str(child.pid));time.sleep(60)")
+    assert isolated_step([sys.executable, "-c", code], tmp_path / "timeout.log", timeout=2) == "timeout"
+    assert pid_file.exists()
+    pid = int(pid_file.read_text())
+    assert not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE

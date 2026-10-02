@@ -1,0 +1,30 @@
+{
+  "gpuOccupiedMiBBeforeUserClosedApplications": 3459,
+  "gpuOccupiedMiBAfter": 760,
+  "comparison": [
+    {
+      "file": "seed-17-text-1.wav",
+      "sameShape": true,
+      "sameSampleRate": true,
+      "exactSamples": true,
+      "maxAbsoluteDifference": 0.0,
+      "originalSha256": "7baa4b683946eec427f1634b78216e90ff057d6fdb78731a7d74d9e8566eabdf",
+      "probeSha256": "7baa4b683946eec427f1634b78216e90ff057d6fdb78731a7d74d9e8566eabdf",
+      "rtf": 3.090726427284533
+    },
+    {
+      "file": "seed-17-text-2.wav",
+      "sameShape": true,
+      "sameSampleRate": true,
+      "exactSamples": true,
+      "maxAbsoluteDifference": 0.0,
+      "originalSha256": "3d0dc16b46bd855b2e466455c1560c7543aa097d870f066cb2490b31a37dd120",
+      "probeSha256": "3d0dc16b46bd855b2e466455c1560c7543aa097d870f066cb2490b31a37dd120",
+      "rtf": 3.0747561016565954
+    }
+  ],
+  "modelLoadSeconds": 27.429957600004855,
+  "peakTorchAllocatedMiB": 3924.42333984375,
+  "peakTorchReservedMiB": 5184.0,
+  "conclusion": "Baseline recovered after user released GPU resources; parameter settings unchanged. GPU contention is a plausible cause, not proof of a fusion failure."
+}

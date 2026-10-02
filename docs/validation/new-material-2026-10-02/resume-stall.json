@@ -1,0 +1,73 @@
+{
+  "status": "aborted-for-runtime-diagnosis",
+  "time": "2026-10-02T10:32:32.033489+08:00",
+  "attempt": "normalized-3 resume, seed 17 text 2",
+  "successfulSamplesPreserved": 25,
+  "observedStage": "CFM Euler step 1, normal sequence length 1570, prompt length 962",
+  "candidateQualityVerdict": "not inferred from this runtime stall",
+  "stack": [
+    {
+      "function": "forward",
+      "file": "diffusion_transformer.py",
+      "line": 248,
+      "locals": {
+        "B": "2",
+        "T": "1570"
+      }
+    },
+    {
+      "function": "solve_euler",
+      "file": "flow_matching.py",
+      "line": 103,
+      "locals": {
+        "prompt_len": "962",
+        "step": "1"
+      }
+    },
+    {
+      "function": "inference",
+      "file": "flow_matching.py",
+      "line": 55,
+      "locals": {
+        "n_timesteps": "25",
+        "B": "1",
+        "T": "1570"
+      }
+    },
+    {
+      "function": "synthesize",
+      "file": "indextts\\runtime\\engine.py",
+      "line": 433,
+      "locals": {
+        "text": "\"这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。\"",
+        "seed": "17"
+      }
+    },
+    {
+      "function": "synthesize",
+      "file": "reference_fusion_experiment.py",
+      "line": 259,
+      "locals": {
+        "case": "\"normalized-3\"",
+        "seed": "17",
+        "i": "2",
+        "text": "\"这段声音用于音色克隆对比。请留意发音是否清楚，音色是否稳定。\""
+      }
+    },
+    {
+      "function": "main",
+      "file": "reference_fusion_experiment.py",
+      "line": 406,
+      "locals": {}
+    },
+    {
+      "function": "<module>",
+      "file": "reference_fusion_experiment.py",
+      "line": 411,
+      "locals": {}
+    }
+  ],
+  "diagnosticTool": "py-spy; separate uv tool cache, no project dependency changes",
+  "diagnosticToolDocumentation": "https://github.com/benfred/py-spy",
+  "next": "Isolated baseline seed 17 texts 1 and 2; copied conditions, no replacement of existing outputs."
+}
