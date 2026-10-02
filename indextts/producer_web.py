@@ -1,73 +1,72 @@
-"""Producer page. It has no emotion or audition page dependency."""
+"""Producer workflow; model settings and library management stay out of its main path."""
 from pathlib import Path
 from types import SimpleNamespace
+import uuid
 import gradio as gr
-from .validation_common import audio_details
 from .library_web import library_controls
-from .web_common import choices
+from .web_common import choices, ui_errors
 
 
 def build_page(service, library, session, *, source_model_dir):
     source_model_dir = str(Path(source_model_dir).expanduser().resolve())
 
-    def preview(path):
-        if not path:
-            return None, {}
-        try:
-            return path, audio_details(path)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
-    def build(reference, vid, name, gender, profile, device, session, progress=gr.Progress()):
-        try:
-            return service.build(reference, vid, name, gender, profile, device, source_model_dir, session, progress)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
-
+    @ui_errors
     def inspect(pack, session):
-        try:
-            return service.inspect(pack, source_model_dir, session)
-        except Exception as exc:
-            raise gr.Error(str(exc)) from exc
+        return service.inspect(pack, source_model_dir, session)
 
-    def build_from_selection(selection, vid, name, gender, profile, device, sid, progress=None):
-        return service.build_selection(selection,vid,name,gender,profile,device,source_model_dir,sid,progress)
+    @ui_errors
+    def build(selection, name, gender, profile, device, sid, progress=gr.Progress()):
+        name = (name or "").strip()
+        if not name or len(name) > 128:
+            raise ValueError("请填写音色名称（1～128 个字符）")
+        vid = "voice-" + uuid.uuid4().hex[:16]
+        path, report = service.build_selection(selection, vid, name, gender, profile, device,
+                                             source_model_dir, sid, progress)
+        method = "多段身份等权融合" if selection["method"] == "speaker-mean-v1" else "单段主参考"
+        message = f"已保存“{name}” · {method} · {'FP32' if profile == 'compatible-fp32' else 'BF16'} · {report['seconds']:.2f} 秒"
+        return path, report, message
 
     with gr.Tab("音色包生成", id="voices"):
-        gr.Textbox(label="源模型目录", value=source_model_dir, interactive=False,
-                   info="制包使用的源模型权重，固定于工具启动配置；音色包保存在下方本地工作区。")
-        gr.Markdown("短参考音频可直接制包；视频或长录音请使用下方“长视频／录音素材整理”，选择并检查主参考。")
         with gr.Row():
-            with gr.Column():
-                reference = gr.File(label="参考音频", file_types=["audio"], type="filepath")
-                audio = gr.Audio(label="参考音频播放", interactive=False)
-                info = gr.JSON(label="音频信息（超过 15 秒时仅使用前 15 秒）")
-            with gr.Column():
-                vid = gr.Textbox(label="音色 ID", placeholder="例如 reader-voice-01")
-                name = gr.Textbox(label="音色名称")
-                gender = gr.Dropdown([("未知", "unknown"), ("女声", "female"), ("男声", "male"), ("中性", "neutral")], value="unknown", label="性别")
-                profile = gr.Radio([("FP32", "compatible-fp32"), ("BF16 混合精度", "fixed-voice-bf16")], value="compatible-fp32", label="制包精度")
-                device = gr.Dropdown([("自动", "auto"), ("CPU", "cpu"), ("CUDA 0", "cuda:0")], value="auto", allow_custom_value=True, label="计算设备")
-                gr.Markdown("BF16 音色包需要匹配的 BF16 推理模型。设备能执行 BF16 不代表一定更快。")
-                make = gr.Button("生成并校验音色包", variant="primary")
-                unload = gr.Button("卸载制包模型")
-                status = gr.Textbox(label="模型状态", interactive=False)
-        output = gr.File(label="下载音色包", interactive=False)
-        with gr.Accordion("生成与校验结果", open=False):
-            report = gr.JSON(label="制包详情")
-        from .material_web import build_controls
-        material_page=build_controls(service.materials,session,generate=build_from_selection,
-            session_directory=service.session_dir,inputs=[vid,name,gender,profile,device,session],outputs=[output,report])
-        reference.change(preview, reference, [audio, info])
-        built = make.click(build, [reference, vid, name, gender, profile, device, session], [output, report], concurrency_limit=None)
-        unload.click(service.unload_producer, outputs=status, concurrency_id="producer", concurrency_limit=1)
-        library_voice, library_profile = library_controls(library, service.rebuild, session, source_model_dir, device)
-        built.success(lambda v: gr.update(choices=choices(library), value=v), vid, library_voice)
-        material_page.built.success(lambda v: gr.update(choices=choices(library),value=v),vid,library_voice)
-        with gr.Accordion("检查已有音色包", open=False):
-            pack = gr.File(label="上传 .ivp", file_types=[".ivp"], type="filepath")
-            gr.Markdown("检查包结构、完整性以及与工具固定源模型的兼容性。")
-            check = gr.Button("检查音色包")
-            inspected = gr.JSON(label="包检查结果")
-            check.click(inspect, [pack, session], inspected)
-    return SimpleNamespace(voice=library_voice, profile=library_profile,materials=material_page)
+            with gr.Column(scale=3, min_width=480):
+                name = gr.Textbox(label="音色名称", placeholder="给这个声音起个名字", render=False)
+                gender = gr.Dropdown([("未知", "unknown"), ("女声", "female"), ("男声", "male"), ("中性", "neutral")],
+                                     value="unknown", label="性别", render=False)
+                profile = gr.Radio([("FP32", "compatible-fp32"), ("BF16", "fixed-voice-bf16")],
+                                   value="compatible-fp32", label="制包精度", render=False)
+                device = gr.Dropdown([("自动", "auto"), ("CPU", "cpu"), ("CUDA 0", "cuda:0")], value="auto",
+                                     allow_custom_value=True, label="计算设备", render=False)
+                method = gr.Radio([("自动：一段用单段，多段用等权融合", "auto"),
+                                   ("只用主参考", "primary-only-v1"), ("多段身份等权融合", "speaker-mean-v1")],
+                                  value="auto", label="参考构建方法", render=False)
+                output = gr.File(label="下载生成的音色包", interactive=False, render=False)
+                report = gr.JSON(label="制包详情", render=False)
+                result = gr.Textbox(label="生成结果", interactive=False, render=False)
+
+                def diagnostics():
+                    gr.Textbox(label="源模型目录", value=source_model_dir, interactive=False)
+                    gr.Markdown("模型位置由工具启动配置固定。默认 FP32、自动设备；BF16 需匹配的推理模型。融合是否适合该素材，仍需试听判断。")
+                    unload = gr.Button("卸载制包模型")
+                    model_status = gr.Textbox(label="模型状态", interactive=False)
+                    unload.click(service.unload_producer, outputs=model_status, concurrency_id="producer", concurrency_limit=1)
+                    report.render()
+                    with gr.Accordion("检查已有音色包", open=False):
+                        pack = gr.File(label="上传 .ivp", file_types=[".ivp"], type="filepath")
+                        check = gr.Button("检查音色包")
+                        inspected = gr.JSON(label="包检查结果")
+                        check.click(inspect, [pack, session], inspected)
+
+                from .material_web import build_controls
+                material_page = build_controls(service.materials, session, generate=build,
+                    session_directory=service.session_dir, inputs=[name, gender, profile, device, session],
+                    outputs=[output, report, result], name=name, options=[profile, device, gender, method],
+                    method=method, diagnostics=diagnostics)
+            with gr.Column(scale=1, min_width=280):
+                library_voice, library_profile = library_controls(library, service.rebuild, session, source_model_dir, device)
+        def select_generated(result):
+            manifest = result["manifest"]
+            return (gr.update(choices=choices(library), value=manifest["voiceId"]),
+                    manifest["provenance"]["profile"])
+        # File inputs are Gradio cache copies, so identity must come from metadata.
+        material_page.built.success(select_generated, report, [library_voice, library_profile])
+    return SimpleNamespace(voice=library_voice, profile=library_profile, materials=material_page)

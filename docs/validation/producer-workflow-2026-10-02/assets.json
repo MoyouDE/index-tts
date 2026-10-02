@@ -1,0 +1,124 @@
+[
+  {
+    "voiceId": "voice-9d04bb4252504724",
+    "packSha256": "d6209fdb5a29d245ce0657e600d81c9b8335d5cc9e75b9515e8e937fb4a0e150",
+    "bytes": 831382,
+    "schemaVersion": 3,
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "provenance": {
+      "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+      "producerVersions": {
+        "librosa": "0.10.2.post1",
+        "torch": "2.8.0+cu128",
+        "torchaudio": "2.8.0+cu128",
+        "transformers": "4.52.1"
+      },
+      "profile": "compatible-fp32",
+      "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+      "referenceSelection": {
+        "audioSha256": "0b3d28428f4f5e1c5cf355304890d0f700925406746d15157223e00f5f54eb77",
+        "confirmedTarget": true,
+        "method": "speaker-mean-v1",
+        "primary": "s002",
+        "primarySha256": "75bacb5404e406b9d0f1f35788cc6f262fbe9e53608fccc519a6ac271d2d3c08",
+        "revision": "1eeb3ad8188caf47b7a908c27df492958890e8368f1fdb249054036e9ec3388b",
+        "segments": [
+          {
+            "end": 3.542,
+            "id": "s001",
+            "selected": true,
+            "sha256": "c335c83d5a5cb9d081776c0fbfeceda69d599048c03cdde83a23b361f7a3c5d1",
+            "start": 0.0
+          },
+          {
+            "end": 8.534,
+            "id": "s002",
+            "selected": true,
+            "sha256": "75bacb5404e406b9d0f1f35788cc6f262fbe9e53608fccc519a6ac271d2d3c08",
+            "start": 4.458
+          },
+          {
+            "end": 11.18,
+            "id": "s003",
+            "selected": true,
+            "sha256": "90eb2459829588d4b630085c02e0a50ba48a28b81e1579f445aa74f2914c7ebb",
+            "start": 9.258
+          }
+        ],
+        "sourceId": "59a42a78630f4f83acf68a65a5adbdf8",
+        "sourceSha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59"
+      },
+      "referenceSha256": "75bacb5404e406b9d0f1f35788cc6f262fbe9e53608fccc519a6ac271d2d3c08"
+    },
+    "librarySelection": {
+      "sourceId": "59a42a78630f4f83acf68a65a5adbdf8",
+      "sourceSha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+      "audioSha256": "0b3d28428f4f5e1c5cf355304890d0f700925406746d15157223e00f5f54eb77",
+      "revision": "1eeb3ad8188caf47b7a908c27df492958890e8368f1fdb249054036e9ec3388b",
+      "segments": [
+        {
+          "id": "s001",
+          "start": 0.0,
+          "end": 3.542,
+          "selected": true,
+          "sha256": "c335c83d5a5cb9d081776c0fbfeceda69d599048c03cdde83a23b361f7a3c5d1"
+        },
+        {
+          "id": "s002",
+          "start": 4.458,
+          "end": 8.534,
+          "selected": true,
+          "sha256": "75bacb5404e406b9d0f1f35788cc6f262fbe9e53608fccc519a6ac271d2d3c08"
+        },
+        {
+          "id": "s003",
+          "start": 9.258,
+          "end": 11.18,
+          "selected": true,
+          "sha256": "90eb2459829588d4b630085c02e0a50ba48a28b81e1579f445aa74f2914c7ebb"
+        }
+      ],
+      "primary": "s002",
+      "method": "speaker-mean-v1",
+      "confirmedTarget": true,
+      "primarySha256": "75bacb5404e406b9d0f1f35788cc6f262fbe9e53608fccc519a6ac271d2d3c08"
+    }
+  },
+  {
+    "voiceId": "voice-aec728ac1d494999",
+    "packSha256": "e75894ca106149397496333e099f2ea3ccb17cad22a4665a58bd8503c1e13530",
+    "bytes": 831018,
+    "schemaVersion": 2,
+    "sourceModelFingerprint": "30fbd7beb7da3dc24f62b0ddcca820992ca5ac6dc487fa9b1e65c8f9af9d3253",
+    "provenance": {
+      "preprocessFingerprint": "48ef8d6718f5a3d75ac233e173d932639728e7b3da08d175cbceebb0efd90ad6",
+      "producerVersions": {
+        "librosa": "0.10.2.post1",
+        "torch": "2.8.0+cu128",
+        "torchaudio": "2.8.0+cu128",
+        "transformers": "4.52.1"
+      },
+      "profile": "compatible-fp32",
+      "referenceEncoderFingerprint": "169f78d8c812370ccccd4aec0047081d8c4f07f8f3c273d2f0e7548f29b4cd4c",
+      "referenceSha256": "265f800d9f2be21d5a2f0fbbd8441af57903991230a925b4908535caa62b3cb5"
+    },
+    "librarySelection": {
+      "sourceId": "59a42a78630f4f83acf68a65a5adbdf8",
+      "sourceSha256": "b59bc0c46d8d3b90f414215be95b3bf5d10b4a2ac2720439b7369cace5709e59",
+      "audioSha256": "0b3d28428f4f5e1c5cf355304890d0f700925406746d15157223e00f5f54eb77",
+      "revision": "b54542efdc803858fe87e15fb74588dd47134d5091d6aafc55c2bf82b001a2ab",
+      "segments": [
+        {
+          "id": "s002",
+          "start": 4.458,
+          "end": 8.534,
+          "selected": true
+        }
+      ],
+      "primary": "s002",
+      "method": "primary-only-v1",
+      "confirmedTarget": true,
+      "primarySha256": "265f800d9f2be21d5a2f0fbbd8441af57903991230a925b4908535caa62b3cb5"
+    }
+  }
+]

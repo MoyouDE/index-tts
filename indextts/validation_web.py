@@ -20,7 +20,9 @@ def create_app(*, source_model_dir=DEFAULT_SOURCE_MODEL_DIR, emotion_model_dir="
     title = "IndexTTS 音色生成工具" if producer_only else "IndexTTS 模块验证"
     description = ("上传参考音频，生成、管理和下载本地音色包。每种精度保留最新包，不写入交接目录。"
                    if producer_only else "本地音色制包、管理、情感验证与合成试听。工作区保留每种精度的最新包和最近一次试听，不写入交接目录。")
-    with gr.Blocks(title=title, theme=gr.themes.Soft()) as app:
+    # Keep long-source selections within the workflow instead of extending the whole page.
+    css = "#producer-segments { max-height: 260px; overflow-y: auto; }" if "producer" in enabled else None
+    with gr.Blocks(title=title, theme=gr.themes.Soft(), css=css) as app:
         session = gr.State(lambda: uuid.uuid4().hex)
         bridge = gr.State(None) if {"emotion", "audition"}.issubset(enabled) else None
         gr.Markdown(f"# {title}\n{description}")

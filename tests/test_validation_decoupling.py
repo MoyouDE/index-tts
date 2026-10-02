@@ -48,7 +48,7 @@ def test_producer_directory_is_fixed_on_server(tmp_path, monkeypatch, custom_dir
             calls.append((operation, args))
             return ("voice.ivp", {"seconds": 1}) if operation != "inspect" else {}
         return invoke
-    for operation in ("build", "rebuild", "inspect"):
+    for operation in ("build_selection", "rebuild", "inspect"):
         monkeypatch.setattr(WorkbenchService, operation, capture(operation))
     monkeypatch.chdir(tmp_path)
     options = {"source_model_dir": "fixed-models"} if custom_directory else {}
@@ -63,11 +63,12 @@ def test_producer_directory_is_fixed_on_server(tmp_path, monkeypatch, custom_dir
         app.blocks[source["id"]].value = "other-models"
         callbacks = {f.fn.__name__: f.fn for f in app.fns.values() if f.fn}
         sid = uuid.uuid4().hex
-        callbacks["build"]("reference.wav", "voice", "Voice", "unknown", "compatible-fp32", "auto", sid)
+        callbacks["generate_snapshot"]({"selection": {"method": "primary-only-v1"},
+            "args": ["Voice", "unknown", "compatible-fp32", "auto", sid]})
         callbacks["regenerate"]("voice", "fixed-voice-bf16", "auto", sid)
         callbacks["inspect"]("voice.ivp", sid)
-        assert [(name, args[{"build": 6, "rebuild": 3, "inspect": 1}[name]]) for name, args in calls] == [
-            ("build", expected), ("rebuild", expected), ("inspect", expected)]
+        assert [(name, args[{"build_selection": 6, "rebuild": 3, "inspect": 1}[name]]) for name, args in calls] == [
+            ("build_selection", expected), ("rebuild", expected), ("inspect", expected)]
     finally:
         app.workbench.close()
 

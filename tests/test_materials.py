@@ -56,6 +56,71 @@ def test_saved_selection_recovers_and_snapshot_is_detached(material):
     with pytest.raises(ValueError,match="其他页面"): service.save(saved["sourceId"],rows(saved),"a",expected_revision=record["revision"])
 
 
+def test_workflow_saves_selection_and_chooses_method_without_changing_primary_abi(material):
+    from indextts.material_web import prepare_selection
+    service, record = material
+    selection, saved = prepare_selection(service, record["sourceId"], rows(record), "auto",
+                                         record["revision"], True, "auto")
+    assert selection["method"] == "speaker-mean-v1" and selection["primary"] == "b"
+    assert selection["revision"] == saved["revision"]
+    values = rows(saved)
+    values[1][3] = False
+    # Removing a manual primary recommends a remaining selected reference.
+    selection, saved = prepare_selection(service, record["sourceId"], values, "b",
+                                         saved["revision"], True, "auto")
+    assert selection["method"] == "primary-only-v1" and selection["primary"] == "a"
+    assert service.record(record["sourceId"]) == saved
+    with pytest.raises(ValueError, match="其他页面"):
+        prepare_selection(service, record["sourceId"], values, "auto", record["revision"], True, "auto")
+
+
+def test_workflow_rejects_unconfirmed_overlong_or_invalid_fusion_without_saving(material):
+    from indextts.material_web import prepare_selection
+    service, record = material
+    for values, approved, method, error in [
+        (rows(record), False, "auto", "确认"),
+        (edit_merge(rows(record), "a"), True, "auto", "拆分"),
+        ([["a", 1., 7., True]], True, "speaker-mean-v1", "至少"),
+    ]:
+        with pytest.raises(ValueError, match=error):
+            prepare_selection(service, record["sourceId"], values, "auto", record["revision"], approved, method)
+        assert service.record(record["sourceId"]) == record
+
+
+def test_workflow_encoding_failure_can_retry_and_queued_settings_are_fixed(material, tmp_path, monkeypatch):
+    from indextts.validation_web import create_app
+    service, record = material
+    record["name"] = "reference.wav"
+    write_json(service.directory(record["sourceId"])/"material.json", record)
+    app = create_app(modules="producer", workspace_dir=service.root.parent, output_dir=tmp_path/"output")
+    callbacks = {f.fn.__name__: f.fn for f in app.fns.values() if f.fn}
+    captured = []
+    def encode(selection, *args):
+        captured.append((copy.deepcopy(selection), args))
+        if len(captured) == 1:
+            raise RuntimeError("model unavailable")
+        return "voice.ivp", {"seconds": 1, "manifest": {"voiceId": args[0], "provenance": {"profile": args[3]}}}
+    monkeypatch.setattr(app.workbench, "build_selection", encode)
+    try:
+        sid = uuid.uuid4().hex
+        prepared, revision, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
+            record["revision"], True, "auto", "Voice", "unknown", "compatible-fp32", "cpu", sid)
+        with pytest.raises(Exception, match="model unavailable"):
+            callbacks["generate_snapshot"](prepared)
+        # A retry uses the revision already returned before encoding failed.
+        retry, _, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
+            revision, True, "auto", "Voice", "unknown", "compatible-fp32", "cpu", sid)
+        result = callbacks["generate_snapshot"](retry)
+        assert result[0] == "voice.ivp"
+        selected, profile = callbacks["select_generated"](result[1])
+        assert selected["value"] == captured[1][1][0] and profile == "compatible-fp32"
+        assert captured[0][0] == captured[1][0] == prepared["selection"]
+        assert captured[0][1][3:5] == ("compatible-fp32", "cpu")
+        assert captured[0][1][0] != captured[1][1][0]  # distinct automatic voice IDs
+    finally:
+        app.workbench.close()
+
+
 @pytest.mark.parametrize("bad", [
     [["a",-1,3,True]], [["a",0,21,True]], [["a",0,float("nan"),True]],
     [["a",0,6,True],["b",5,10,True]], [["a",0,6,True],["a",7,10,True]],
