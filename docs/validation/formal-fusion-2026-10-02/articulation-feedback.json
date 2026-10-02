@@ -1,6 +1,6 @@
 {
   "userFeedback": "会议的议发音不清楚",
-  "status": "original-coarticulation-issue-open-local-workaround-confirmed",
+  "status": "reference-dependent-articulation-confirmed-on-this-sentence-original-reference-issue-open",
   "voiceId": "bvec-mean-web-01",
   "profile": "compatible-fp32",
   "method": "speaker-mean-v1",
@@ -18,5 +18,8 @@
   "diagnosticVerdict": "explicit-boundary-clarity-confirmed-on-this-sentence",
   "boundaryUserFeedback": "能",
   "boundaryArticulationAccepted": true,
-  "acceptanceScope": "User confirmed 议 and 安 can be distinguished in the comma diagnostic; this does not accept the unmodified sentence or prove a general repair."
+  "acceptanceScope": "User confirmed 议 and 安 can be distinguished in the comma diagnostic; this does not accept the unmodified sentence or prove a general repair.",
+  "alternateReferenceUserFeedback": "这个很正常",
+  "alternateReferenceArticulationAccepted": true,
+  "globalTextRewriteRequired": false
 }

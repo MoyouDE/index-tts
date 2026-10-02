@@ -181,5 +181,7 @@
   "diagnosticOnly": true,
   "controlCheck": "Original unmodified text, model, profile, seed and all effective generation settings identical; only reference conditioning changed.",
   "referenceChoice": "BV1GARFBXEwe: s003 primary; s003/s006/s008/s012 equal mean; excluded s002 after earlier BGM feedback.",
-  "acceptability": "pending-user-listening"
+  "acceptability": "articulation-normal-on-this-sentence-confirmed-by-user",
+  "userFeedback": "这个很正常",
+  "conclusion": "With unchanged text and generation controls, alternative reference conditioning produced user-confirmed normal articulation. Evidence supports reference-dependent behavior on this sentence; does not isolate raw material, acoustic prompt, or fused identity as the cause."
 }
