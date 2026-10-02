@@ -1,0 +1,82 @@
+{
+  "groups": [
+    {
+      "case": "baseline",
+      "meanRtf": 6.652883529022756,
+      "minRtf": 3.5631375022530363,
+      "maxRtf": 17.335348837451146,
+      "meanInternalSilenceSeconds": 2.8325,
+      "meanAudioSeconds": 8.695875000000001,
+      "maxTorchAllocatedMiB": 3933.103515625,
+      "maxTorchReservedMiB": 5184.0,
+      "maxProcessRssMiB": 2318.71484375
+    },
+    {
+      "case": "mean-3",
+      "meanRtf": 12.024990016368509,
+      "minRtf": 6.643503125000905,
+      "maxRtf": 17.120715825639106,
+      "meanInternalSilenceSeconds": 2.8449999999999998,
+      "meanAudioSeconds": 8.9251725,
+      "maxTorchAllocatedMiB": 3934.9462890625,
+      "maxTorchReservedMiB": 5184.0,
+      "maxProcessRssMiB": 2322.6484375
+    },
+    {
+      "case": "mean-4",
+      "meanRtf": 12.464833072517365,
+      "minRtf": 8.043141963902755,
+      "maxRtf": 15.013181645372942,
+      "meanInternalSilenceSeconds": 2.7875,
+      "meanAudioSeconds": 8.695875000000001,
+      "maxTorchAllocatedMiB": 3934.8291015625,
+      "maxTorchReservedMiB": 5144.0,
+      "maxProcessRssMiB": 2247.0078125
+    },
+    {
+      "case": "normalized-3",
+      "meanRtf": 4.8679959852123265,
+      "minRtf": 2.8586357200551675,
+      "maxRtf": 11.144142202690924,
+      "meanInternalSilenceSeconds": 2.9275,
+      "meanAudioSeconds": 8.9367825,
+      "maxTorchAllocatedMiB": 3936.595703125,
+      "maxTorchReservedMiB": 5184.0,
+      "maxProcessRssMiB": 2916.0078125
+    },
+    {
+      "case": "normalized-4",
+      "meanRtf": 8.528511981380067,
+      "minRtf": 7.757294822887349,
+      "maxRtf": 10.754492850434602,
+      "meanInternalSilenceSeconds": 2.6925,
+      "meanAudioSeconds": 8.58558,
+      "maxTorchAllocatedMiB": 3936.3681640625,
+      "maxTorchReservedMiB": 5144.0,
+      "maxProcessRssMiB": 2257.15625
+    },
+    {
+      "case": "pause-keep",
+      "meanRtf": 7.926973889293669,
+      "minRtf": 5.560392131160304,
+      "maxRtf": 10.400579634632637,
+      "meanInternalSilenceSeconds": 2.8325,
+      "meanAudioSeconds": 8.695875000000001,
+      "maxTorchAllocatedMiB": 3933.103515625,
+      "maxTorchReservedMiB": 5184.0,
+      "maxProcessRssMiB": 2248.34375
+    },
+    {
+      "case": "pause-short",
+      "meanRtf": 6.129202791283733,
+      "minRtf": 4.225700112637933,
+      "maxRtf": 8.109816464603773,
+      "meanInternalSilenceSeconds": 1.405,
+      "meanAudioSeconds": 7.7699774999999995,
+      "maxTorchAllocatedMiB": 3921.3125,
+      "maxTorchReservedMiB": 4620.0,
+      "maxProcessRssMiB": 2348.26171875
+    }
+  ],
+  "scope": "PyTorch allocator peaks in synthesis subprocess; RSS process memory; different running periods and GPU contention prevent performance ranking."
+}

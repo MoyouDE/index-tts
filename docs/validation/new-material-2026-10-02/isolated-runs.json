@@ -1,0 +1,65 @@
+[
+  {
+    "stage": "encode",
+    "case": null,
+    "returncode": 0,
+    "seconds": 77.29272820000187,
+    "log": "encode-all.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "baseline",
+    "returncode": 0,
+    "seconds": 553.4155582000021,
+    "log": "synthesize-baseline.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "mean-3",
+    "returncode": 0,
+    "seconds": 950.3014398000014,
+    "log": "synthesize-mean-3.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "mean-4",
+    "returncode": 0,
+    "seconds": 954.0808182999972,
+    "log": "synthesize-mean-4.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "normalized-3",
+    "returncode": 0,
+    "seconds": 303.657930500005,
+    "log": "synthesize-normalized-3-resume.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "normalized-4",
+    "returncode": 0,
+    "seconds": 621.3212357000011,
+    "log": "synthesize-normalized-4-resume.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "pause-keep",
+    "returncode": 0,
+    "seconds": 613.8382794999925,
+    "log": "synthesize-pause-keep-resume.log"
+  },
+  {
+    "stage": "synthesize",
+    "case": "pause-short",
+    "returncode": 0,
+    "seconds": 436.4967605999991,
+    "log": "synthesize-pause-short-resume.log"
+  },
+  {
+    "stage": "summarize",
+    "case": null,
+    "returncode": 0,
+    "seconds": 29.200122700000065,
+    "log": "summarize-all-resume.log"
+  }
+]

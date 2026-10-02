@@ -1,0 +1,38 @@
+{
+  "sameSixInputTensors": true,
+  "sameFixedSeedsAndParameters": true,
+  "comparisons": [
+    {
+      "file": "seed-17-text-1.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-17-text-2.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-17-text-3.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-17-text-4.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-29-text-1.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-29-text-2.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-29-text-3.wav",
+      "exactFile": true
+    },
+    {
+      "file": "seed-29-text-4.wav",
+      "exactFile": true
+    }
+  ]
+}
