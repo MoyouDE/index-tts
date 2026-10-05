@@ -18,7 +18,7 @@ uv sync --locked --extra validation-web
 
 地址 `http://127.0.0.1:7862/`，支持 `--port`、`--cpu-threads`。入口从自身位置定位文件，支持其他工作目录启动。打开页面不会下载或导出模型。
 
-在 Readest 开发工作区中，依赖准备完成后可直接双击上层根目录的 `start-voice-producer.bat`；已运行时复用服务。满意的最终 `.ivp` 下载后，由用户手动放入上层的 `index-tts-package/SoundPackage/official/`，作为之后阅读器交接的正式音色来源；制作工具不自动加入该清单。
+在 Readest 开发工作区中，依赖准备完成后可直接双击上层根目录的 `start-voice-producer.bat`；已运行时复用服务。满意的最终 `.ivp` 下载后，由用户直接手动放入上层的 `index-tts-package/SoundPackage/` 并提交 Git，作为之后阅读器交接的正式音色来源；本层不存放临时或测试音色，制作工具不自动加入该清单。
 
 资产锁包含正式制包权重、Silero VAD、tokenizer 和 BigVGAN 配置。独立准备命令先核验正式资产，再原子导出并校验 FP32 runtime ABI v2 和 BF16 ABI v3。已有运行模型只校验，不覆盖。旧 ABI v1 目录保留，新流程使用独立目录。文本试听需要 CUDA；缺失或不兼容时，参考编辑、恢复和已有包下载仍可进行。
 
