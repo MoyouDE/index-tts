@@ -44,6 +44,32 @@ def resolve_primary(rows, preferred="auto"):
     return max(chosen, key=lambda r: float(r[2])-float(r[1]))[0]
 
 
+def exclude_short_ranges(values, minimum_seconds):
+    if (isinstance(minimum_seconds, bool) or not isinstance(minimum_seconds, (int, float))
+            or not math.isfinite(minimum_seconds) or not 0 < minimum_seconds <= 15):
+        raise ValueError("最短保留时长须大于 0 且不超过 15 秒")
+    updated = copy.deepcopy(values)
+    excluded = 0
+    for row in updated:
+        duration = float(row[2]) - float(row[1])
+        if not math.isfinite(duration) or duration <= 0:
+            raise ValueError("片段起止时间无效，请先调整边界")
+        if row[3] and duration < minimum_seconds - 1e-6:
+            row[3] = False
+            excluded += 1
+    return updated, excluded
+
+
+def segmentation_options(silence_seconds, volume_enabled, volume_db):
+    if (isinstance(silence_seconds, bool) or not isinstance(silence_seconds, (int, float))
+            or not math.isfinite(silence_seconds) or not .1 <= silence_seconds <= 3):
+        raise ValueError("空白间隔须为 0.1～3 秒")
+    if not isinstance(volume_enabled, bool):
+        raise ValueError("最低音量过滤开关无效")
+    return {"min_silence_ms": round(silence_seconds * 1000, 6),
+            "min_volume_db": volume_db if volume_enabled else None}
+
+
 def keep_range(values, active, start, end, duration):
     start, end = float(start), float(end)
     if not math.isfinite(start+end) or not 0 <= start < end <= duration:
@@ -64,19 +90,12 @@ def keep_range(values, active, start, end, duration):
     return sorted(updated, key=lambda r: float(r[1])), active
 
 
-def prepare_selection(materials, source_id, values, main, revision, approved, construction):
-    if not approved:
-        raise ValueError("请确认选中片段属于同一目标人物")
+def prepare_selection(materials, source_id, values, main, revision):
     primary = resolve_primary(values, main)
     chosen = [r for r in values if r[3]]
     if any(float(r[2])-float(r[1]) > 15+1e-6 for r in chosen):
         raise ValueError("每个选中片段不得超过 15 秒，请在“编辑片段”中拆分")
-    if construction == "auto":
-        construction = "speaker-mean-v1" if len(chosen) > 1 else "primary-only-v1"
-    if construction not in {"speaker-mean-v1", "primary-only-v1"}:
-        raise ValueError("未知参考构建方法")
-    if construction == "speaker-mean-v1" and len(chosen) < 2:
-        raise ValueError("多段融合至少需要两个片段；可切换为自动或单段")
+    construction = "speaker-mean-v1" if len(chosen) > 1 else "primary-only-v1"
     record = materials.save(source_id, values, primary, expected_revision=revision)
     selection = materials.selection(source_id, record["revision"], confirmed=True)
     selection["method"] = construction
@@ -100,7 +119,7 @@ def read_draft(source_id, draft):
 
 
 def build_controls(materials, session, *, generate, session_directory, inputs, outputs,
-                   name, options, method, diagnostics):
+                   name, options, diagnostics, show_tools=False):
     def choices():
         return [(f"{r['name']} · {r['sourceId'][:8]}", r["sourceId"]) for r in materials.items()]
 
@@ -114,45 +133,52 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
         return (f"素材 {record['durationSeconds']:.2f} 秒 · 检测语音 {record['speechSeconds']:.2f} 秒\n"
                 f"选中 {len(chosen)} 段 / {seconds:.2f} 秒 · 主参考 {primary}")
 
-    gr.Markdown("### 1. 上传素材")
-    media = gr.File(label="上传音频或视频 · 自动分段", type="filepath", file_types=["audio", "video"], height=110)
+    gr.Markdown("### ① 上传音频")
+    media = gr.File(label="拖入音频或视频，自动寻找片段", type="filepath", file_types=["audio", "video"], height=110)
     with gr.Accordion("使用已保存素材", open=False):
         with gr.Row():
             source = gr.Dropdown(choices=choices(), value=None, label="已保存素材", interactive=True)
             refresh = gr.Button("刷新素材", size="sm")
-    gr.Markdown("### 2. 在音轨上拖选片段")
-    main_player = gr.HTML(player_html(), label="完整音轨", show_label=True, container=True)
+    with gr.Row():
+        with gr.Column(min_width=190):
+            silence = gr.Slider(minimum=.1, maximum=3, value=.5, step=.05, label="分段停顿（秒）",
+                            elem_id='material-silence',
+                            info="调大可保留更连续的对白。")
+        with gr.Column(min_width=190):
+            volume_enabled = gr.Checkbox(label="过滤小声杂音", value=False, elem_id='material-volume-enabled')
+            volume_floor = gr.Slider(minimum=-80, maximum=0, value=-50, step=1,
+                                     label="最低音量（dBFS）", interactive=False, elem_id='material-volume',
+                                     info="调高可排除更弱的声音。")
+        with gr.Column(min_width=190):
+            minimum_duration = gr.Slider(minimum=.1, maximum=15, value=1, step=.1,
+                                     label="最短片段（秒）", elem_id='material-minimum', interactive=True,
+                                     info="调大可隐藏零碎短声音。")
+    volume_enabled.input(lambda enabled: gr.update(interactive=enabled), volume_enabled, volume_floor)
+    main_player = gr.HTML(player_html(), label="候选与片段调整", show_label=False, container=True)
     draft = gr.Textbox(value="", elem_id="material-waveform-draft", show_label=False)
     main_player.change(None, js=INITIALIZE, queue=False)
-    with gr.Row():
-        smart = gr.Button("智能截取", size="sm")
-        clear = gr.Button("清空待用片段", size="sm")
     details = gr.Textbox(label="当前选择", lines=2, interactive=False, visible=False)
-    with gr.Accordion("精确编辑与拆分", open=False):
-        preview_id = gr.Dropdown(choices=[("新增截取", "__new__")], value="__new__", label="编辑片段", interactive=True)
-        rows = gr.Dataframe(headers=["片段 ID", "起点（秒）", "终点（秒）", "选中"],
-                            datatype=["str", "number", "number", "bool"], type="array", interactive=True,
-                            col_count=(4, "fixed"), label="分段编辑 · 生成时自动保存")
-        primary = gr.Dropdown(choices=[("自动选择", "auto")], value="auto", label="主参考", interactive=True)
-        gr.Markdown("自动主参考选用最长的选中片段；可手动指定。每段最多 15 秒，超长片段请拆分。")
-        with gr.Row():
-            point = gr.Number(label="拆分位置（素材绝对秒数）")
-            split = gr.Button("拆分试听片段")
-            merge = gr.Button("与下一片段合并")
-    gr.Markdown("### 3. 生成音色包")
+    preview_id = gr.Dropdown(choices=[("新增截取", "__new__")], value="__new__", visible=False)
+    primary = gr.Dropdown(choices=[("自动选择", "auto")], value="auto", visible=False)
+    rows = gr.Dataframe(headers=["片段 ID", "起点（秒）", "终点（秒）", "选中"],
+                            datatype=["str", "number", "number", "bool"], type="array", interactive=False,
+                            col_count=(4, "fixed"), visible=False)
+    gr.Markdown("### ④ 使用选中片段生成音色包")
     name.render()
-    confirmed = gr.Checkbox(label="选中片段都是同一人，且已排除不需要的声音", value=False)
     with gr.Accordion("高级设置", open=False):
         for component in options:
             component.render()
-        gr.Markdown("自动模式：单段使用主参考，多段融合身份表示；声学提示仍使用主参考。不会自动清除背景音乐。")
+        gr.Markdown("按选中片段数量自动处理：一段使用单段参考，多段等权融合音色身份；声学提示仍使用主参考。不会自动清除背景音乐。")
+    gr.Markdown("生成前建议逐段试听：选中片段应来自同一个目标人物，尽量避开其他人声、杂音和背景音乐。",
+                elem_id="material-quality-hint")
     make = gr.Button("生成音色包", variant="primary")
     outputs[2].render()
     outputs[0].render()
-    with gr.Accordion("诊断与模型", open=False):
+    with gr.Accordion("诊断与模型", open=False, visible=show_tools):
         diagnostics()
     revision = gr.State(None)
     snapshot = gr.State(None)
+    analysis = gr.State(None)
 
     def view(values, main="auto", preview=None):
         chosen = [r[0] for r in values if r[3]]
@@ -161,10 +187,16 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
         return (gr.update(choices=[("新增截取", "__new__")]+labels([r for r in values if r[3]]), value=preview),
                 gr.update(choices=[("自动选择", "auto")]+[(r[0], r[0]) for r in values if r[3]], value=main))
 
-    def editor(source_id, values, main):
+    def current_record(source_id, detected=None):
         record = materials.record(source_id)
+        if detected and detected.get("sourceId") == source_id:
+            record["speechSeconds"] = detected["speechSeconds"]
+        return record
+
+    def editor(source_id, values, main, detected=None):
+        record = current_record(source_id, detected)
         return player_html(materials.directory(source_id)/"audio.wav", record=record, values=values,
-                           primary=main, peaks=materials.waveform(source_id))
+                           primary=main, peaks=materials.waveform(source_id), analysis=materials.vad_analysis(source_id))
 
     def payload(source_id, values, main):
         return json.dumps({"sourceId": source_id, "rows": values, "primary": main}, ensure_ascii=False)
@@ -172,66 +204,48 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
     @ui_errors
     def load(source_id):
         if not source_id:
-            return [], *view([]), None, "", player_html(), False, ""
+            return ([], *view([]), None, "", player_html(), "", None, .5, False,
+                    gr.update(value=-50, interactive=False))
         record = materials.record(source_id)
         values = table_rows(record)
         main = record["primary"] or "auto"
+        settings = record.get("settings", {})
+        minimum_volume = settings.get("minVolumeDb")
+        detected = {"sourceId": source_id, "speechSeconds": record["speechSeconds"]}
         return (values, *view(values, main), record["revision"], summary(record, values, main),
-                editor(source_id, values, main), False, payload(source_id, values, main))
+                editor(source_id, values, main), payload(source_id, values, main), detected,
+                settings.get("minSilenceMs", 500) / 1000, minimum_volume is not None,
+                gr.update(value=minimum_volume if minimum_volume is not None else -50,
+                          interactive=minimum_volume is not None))
 
-    loaded_outputs = [rows, preview_id, primary, revision, details, main_player, confirmed, draft]
+    loaded_outputs = [rows, preview_id, primary, revision, details, main_player, draft,
+                      analysis, silence, volume_enabled, volume_floor]
     source.change(load, source, loaded_outputs)
     refresh.click(lambda: gr.update(choices=choices(), value=None), outputs=source)
 
     @ui_errors
-    def import_material(path, progress=gr.Progress()):
+    def import_material(path, silence_seconds, volume_enabled, volume_db, progress=gr.Progress()):
         if not path:
             return gr.update()
-        record = materials.import_media(path, progress)
+        record = materials.import_media(path, progress,
+            **segmentation_options(silence_seconds, volume_enabled, volume_db))
         return gr.update(choices=choices(), value=record["sourceId"])
-    media.upload(import_material, media, source, concurrency_id="materials", concurrency_limit=1)
+    media.upload(import_material, [media, silence, volume_enabled, volume_floor], source,
+                 concurrency_id="materials", concurrency_limit=1)
     media.clear(lambda: gr.update(value=None), outputs=source)
-
-    @ui_errors
-    def sync_rows(source_id, values, main, preview):
-        if not source_id:
-            return *view([]), "", False, player_html(), ""
-        return (*view(values, main, preview), summary(materials.record(source_id), values, main), False,
-                editor(source_id, values, main), payload(source_id, values, main))
-    sync_outputs = [preview_id, primary, details, confirmed, main_player, draft]
-    rows.input(sync_rows, [source, rows, primary, preview_id], sync_outputs)
 
     @ui_errors
     def sync_draft(source_id, encoded):
         if not source_id or not encoded:
-            return gr.skip(), gr.skip(), gr.skip(), False
+            return gr.skip(), gr.skip(), gr.skip()
         values, main = read_draft(source_id, encoded)
-        return values, *view(values, main), False
-    draft.input(ui_errors(sync_draft), [source, draft], [rows, preview_id, primary, confirmed],
+        return values, *view(values, main)
+    draft.input(ui_errors(sync_draft), [source, draft], [rows, preview_id, primary],
                 trigger_mode="always_last", show_progress="hidden")
 
-    @ui_errors
-    def clear_ranges(source_id, values):
-        if not source_id:
-            raise ValueError("请先上传或选择素材")
-        values = [[*r[:3], False] for r in values]
-        return values, *sync_rows(source_id, values, "auto", "__new__")
-    clear.click(clear_ranges, [source, rows], [rows, *sync_outputs])
 
     @ui_errors
-    def suggest(source_id, progress=gr.Progress()):
-        if not source_id:
-            raise ValueError("请先上传或选择素材")
-        detected = materials.suggest_segments(source_id, progress)
-        values = table_rows(detected)
-        return values, *sync_rows(source_id, values, "auto", None)
-    smart.click(suggest, source, [rows, *sync_outputs], concurrency_id="materials", concurrency_limit=1)
-    split.click(ui_errors(edit_split), [rows, preview_id, point], rows).success(sync_rows, [source, rows, primary, preview_id], sync_outputs)
-    merge.click(ui_errors(edit_merge), [rows, preview_id], rows).success(sync_rows, [source, rows, primary, preview_id], sync_outputs)
-    primary.input(sync_rows, [source, rows, primary, preview_id], sync_outputs)
-
-    @ui_errors
-    def prepare(source_id, values, main, rev, approved, construction, encoded, *args):
+    def prepare(source_id, values, main, rev, encoded, *args):
         if not source_id:
             raise ValueError("请先上传或选择素材")
         # The latest browser draft is authoritative, even if table mirroring is still queued.
@@ -239,10 +253,10 @@ def build_controls(materials, session, *, generate, session_directory, inputs, o
         display_name = args[0]
         if not display_name or not display_name.strip() or len(display_name.strip()) > 128:
             raise ValueError("请填写音色名称（1～128 个字符）")
-        selection, record = prepare_selection(materials, source_id, values, main, rev, approved, construction)
+        selection, record = prepare_selection(materials, source_id, values, main, rev)
         return {"selection": selection, "args": copy.deepcopy(args)}, record["revision"], summary(record, values, selection["primary"])
     # Save before encoding so a model failure still leaves the session revision current.
-    prepared = make.click(prepare, [source, rows, primary, revision, confirmed, method, draft, *inputs],
+    prepared = make.click(prepare, [source, rows, primary, revision, draft, *inputs],
                           [snapshot, revision, details], concurrency_id="materials", concurrency_limit=1)
     def generate_snapshot(job, progress=gr.Progress()):
         return generate(copy.deepcopy(job["selection"]), *copy.deepcopy(job["args"]), progress=progress)

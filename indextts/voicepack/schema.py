@@ -24,6 +24,10 @@ REQUIRED_FILES = {
     LICENSE_ZH_NAME,
     DISCLAIMER_NAME,
 }
+BF16_MANIFEST_NAME = "bf16/manifest.json"
+BF16_TENSORS_NAME = "bf16/conditioning.safetensors"
+DUAL_FILES = REQUIRED_FILES | {BF16_MANIFEST_NAME, BF16_TENSORS_NAME}
+DUAL_VARIANTS = {"compatible-fp32": TENSORS_NAME, "fixed-voice-bf16": BF16_TENSORS_NAME}
 
 TENSOR_RULES = {
     "speaker_latent": (2, {"bfloat16", "float16", "float32"}),
@@ -65,14 +69,16 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         "files",
         "license",
     }
-    if manifest.get("schemaVersion") in (2, 3):
+    if manifest.get("schemaVersion") in (2, 3, 4):
         required.add("provenance")
+    if manifest.get("schemaVersion") == 4:
+        required.add("variants")
     missing = sorted(required - set(manifest))
     if missing:
         raise VoicePackSchemaError(f"manifest 缺少字段: {', '.join(missing)}")
     if set(manifest) - required:
         raise VoicePackSchemaError(f"manifest 含未知字段: {', '.join(sorted(set(manifest) - required))}")
-    if manifest["schemaVersion"] not in (SCHEMA_VERSION, 2, 3):
+    if manifest["schemaVersion"] not in (SCHEMA_VERSION, 2, 3, 4):
         raise VoicePackSchemaError(f"不支持的 schemaVersion: {manifest['schemaVersion']!r}")
     if not isinstance(manifest["voiceId"], str) or not _VOICE_ID.fullmatch(manifest["voiceId"]):
         raise VoicePackSchemaError("voiceId 必须为 1-64 位字母、数字、点、下划线或连字符")
@@ -107,12 +113,12 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
             raise VoicePackSchemaError(f"张量 {name} 的 dtype 无效: {spec['dtype']!r}")
 
     _validate_fixed_tensor_shapes(tensors)
-    if manifest["schemaVersion"] in (2, 3):
+    if manifest["schemaVersion"] in (2, 3, 4):
         from .provenance import PREPROCESS_FINGERPRINT
         provenance = manifest["provenance"]
         keys = {"profile", "referenceSha256", "referenceEncoderFingerprint",
                 "preprocessFingerprint", "producerVersions"}
-        if manifest["schemaVersion"] == 3:
+        if manifest["schemaVersion"] == 3 or (manifest["schemaVersion"] == 4 and isinstance(provenance, dict) and "referenceSelection" in provenance):
             keys.add("referenceSelection")
         if not isinstance(provenance, dict) or set(provenance) != keys:
             raise VoicePackSchemaError("Invalid voice provenance")
@@ -125,7 +131,7 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
             raise VoicePackSchemaError("Incompatible reference preprocessing")
         if not isinstance(provenance["producerVersions"], dict):
             raise VoicePackSchemaError("Invalid producer versions")
-        if manifest["schemaVersion"] == 3:
+        if "referenceSelection" in provenance:
             from .selection import validate_selection_record
             validate_selection_record(provenance["referenceSelection"], provenance["referenceSha256"])
         for name, spec in tensors.items():
@@ -135,7 +141,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
                 raise VoicePackSchemaError(f"Voice precision mismatch: {name}")
 
     files = manifest["files"]
-    if not isinstance(files, dict) or set(files) != REQUIRED_FILES - {MANIFEST_NAME}:
+    expected_files = DUAL_FILES if manifest["schemaVersion"] == 4 else REQUIRED_FILES
+    if not isinstance(files, dict) or set(files) != expected_files - {MANIFEST_NAME}:
         raise VoicePackSchemaError("manifest 文件清单不完整")
     for name, digest in files.items():
         if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
@@ -146,6 +153,9 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise VoicePackSchemaError("许可元数据无效")
     if license_info.get("voiceRights") != "provided-separately":
         raise VoicePackSchemaError("音色权利声明缺失")
+    if manifest["schemaVersion"] == 4 and (manifest["variants"] != DUAL_VARIANTS or
+            manifest["provenance"]["profile"] != "compatible-fp32"):
+        raise VoicePackSchemaError("双精度音色包必须同时包含 FP32 和 BF16")
 
 
 def _validate_fixed_tensor_shapes(tensors: Mapping[str, Any]) -> None:

@@ -88,15 +88,21 @@ class WorkbenchService:
         self.require("emotion")
         return self.validation.analyze(model_dir, mode, text, kind, rows, target, use_default, threshold, session_id)
 
-    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None, reference_selection=None, references=None):
+    def build(self, reference, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, instance=None, reference_selection=None, references=None, temporary=False, cancelled=None):
         self.require("producer")
-        if instance is None and (self.library.directory(voice_id) / "voice.json").exists():
+        if not temporary and instance is None and (self.library.directory(voice_id) / "voice.json").exists():
             raise ValueError("音色 ID 已存在，请选择库中音色生成；更换参考音频请使用新 ID")
         path = None
-        with self.gpu.use("producer"):
+        with self.gpu.use("producer", cancelled):
             try:
                 kwargs = {"reference_selection": reference_selection, "references": references} if references is not None else {}
                 path, report = self.validation.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress, **kwargs)
+                if cancelled is not None and cancelled.is_set():
+                    raise RuntimeError("制作已取消")
+                if temporary:
+                    # The caller owns this job and commits it to its draft atomically.
+                    result, path = path, None
+                    return result, report
                 copied_reference = next(Path(path).parent.glob("reference.*"))
                 installed = self.library.install(path, reference=copied_reference, expected_instance=instance,
                                                  reference_selection=reference_selection, references=references)
@@ -136,10 +142,11 @@ class WorkbenchService:
                               device, model_dir, session_id, progress, instance=record["instance"],
                               reference_selection=record.get("referenceSelection"), references=references)
 
-    def build_selection(self, selection, voice_id, name, gender, profile, device, model_dir, session_id, progress=None):
+    def build_selection(self, selection, voice_id, name, gender, profile, device, model_dir, session_id, progress=None, *, materials=None, temporary=False, cancelled=None, reference_snapshot=None):
         self.require("producer")
         from .voicepack.provenance import sha256_file
-        fixed = self.materials.selection(selection["sourceId"], selection["revision"],
+        materials = materials or self.materials
+        fixed = materials.selection(selection["sourceId"], selection["revision"],
                                         confirmed=selection.get("confirmedTarget") is True)
         method = selection.get("method")
         if method not in {"primary-only-v1", "speaker-mean-v1"}:
@@ -149,9 +156,9 @@ class WorkbenchService:
         fixed["method"] = method
         if fixed != selection:
             raise ValueError("参考选择快照与保存记录不一致")
-        directory = self.materials.directory(fixed["sourceId"])
+        directory = materials.directory(fixed["sourceId"])
         if method == "speaker-mean-v1":
-            material = self.materials.record(fixed["sourceId"])
+            material = materials.record(fixed["sourceId"])
             if not material.get("original"):
                 raise ValueError("融合素材缺少原文件记录")
             original = (directory / material["original"]).resolve()
@@ -162,18 +169,35 @@ class WorkbenchService:
             raise ValueError("素材音轨完整性检查失败")
         with tempfile.TemporaryDirectory(dir=self._jobs) as job:
             primary = next(s for s in fixed["segments"] if s["id"] == fixed["primary"])
-            reference = self.materials.crop(fixed["sourceId"], primary["start"], primary["end"], Path(job)/"primary.wav")
+            if reference_snapshot:
+                reference=str(Path(job)/'primary.wav')
+                shutil.copyfile(Path(reference_snapshot)/'primary.wav',reference)
+            else:
+                reference = materials.crop(fixed["sourceId"], primary["start"], primary["end"], Path(job)/"primary.wav")
             fixed["primarySha256"] = sha256_file(reference)
             references = None
             if method == "speaker-mean-v1":
                 references = {}
                 for seg in fixed["segments"]:
-                    cropped = self.materials.crop(fixed["sourceId"], seg["start"], seg["end"], Path(job)/(seg["id"]+".wav"))
+                    if reference_snapshot:
+                        cropped=str(Path(job)/(seg['id']+'.wav'))
+                        shutil.copyfile(Path(reference_snapshot)/(seg['id']+'.wav'),cropped)
+                    else:
+                        cropped = materials.crop(fixed["sourceId"], seg["start"], seg["end"], Path(job)/(seg["id"]+".wav"))
                     seg["sha256"] = sha256_file(cropped)
                     references[seg["id"]] = cropped
             kwargs = {"references": references} if references is not None else {}
-            return self.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress,
-                              reference_selection=fixed, **kwargs)
+            result = self.build(reference, voice_id, name, gender, profile, device, model_dir, session_id, progress,
+                                reference_selection=fixed, temporary=temporary, cancelled=cancelled, **kwargs)
+            if temporary:
+                target = Path(result[0]).parent / "references"
+                target.mkdir()
+                shutil.copyfile(reference, target / "primary.wav")
+                for sid, cropped in (references or {}).items():
+                    shutil.copyfile(cropped, target / (sid + ".wav"))
+                from .voice_workspace import atomic_json
+                atomic_json(target / "selection.json", fixed)
+            return result
 
     def cancel(self, session_id):
         if self._audition_service is None:

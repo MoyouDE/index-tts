@@ -99,7 +99,7 @@ class MaterialService:
             write_json(cache, value)
             return value
 
-    def suggest_segments(self, source_id, progress=None):
+    def suggest_segments(self, source_id, progress=None, *, min_silence_ms=500, min_volume_db=None):
         """Return a fresh editing draft; never overwrite an existing selection."""
         audio = self.directory(source_id)/"vad.wav"
         if not audio.is_file():
@@ -109,9 +109,20 @@ class MaterialService:
                 from .material_vad import SileroVad
                 self._detector = SileroVad()
             detector = self._detector
-        return detector.detect(audio, progress)
+        return detector.detect(audio, progress, min_silence_ms=min_silence_ms, min_volume_db=min_volume_db)
 
-    def import_media(self, uploaded, progress=None):
+    def vad_analysis(self, source_id, progress=None):
+        audio = self.directory(source_id)/'vad.wav'
+        if not audio.is_file():
+            return None  # Older manually cropped materials can still be edited.
+        with self.lock:
+            if self._detector is None:
+                from .material_vad import SileroVad
+                self._detector = SileroVad()
+            detector = self._detector
+        return detector.analyze(audio, progress)
+
+    def import_media(self, uploaded, progress=None, *, min_silence_ms=500, min_volume_db=None):
         if not uploaded or not Path(uploaded).is_file():
             raise ValueError("请上传本地视频或音频")
         executable = ffmpeg_executable()
@@ -137,12 +148,18 @@ class MaterialService:
             if self._detector is None:
                 from .material_vad import SileroVad
                 self._detector = SileroVad()
-            detected = self._detector.detect(staging/"vad.wav", progress)
+            detected = self._detector.detect(staging/"vad.wav", progress,
+                                            min_silence_ms=min_silence_ms, min_volume_db=min_volume_db)
             from .voicepack.provenance import sha256_file
             record = {"sourceId": source_id, "name": Path(uploaded).name, "original": original.name,
                       "sourceSha256": sha256_file(original), "audioSha256": sha256_file(staging/"audio.wav"),
                       "durationSeconds": details.duration, "sampleRate": 22050, **detected,
                       "primary": max(detected["segments"],key=lambda s:s["end"]-s["start"])["id"] if detected["segments"] else None}
+            # Detection locates candidates; only explicit confirmation stages references.
+            record['selectionWorkflow'] = 'candidate-review-v1'
+            for segment in record['segments']:
+                segment['selected'] = False
+            record['primary'] = None
             record["revision"] = self.selection_revision(record)
             write_json(staging/"material.json", record)
             with self.lock:

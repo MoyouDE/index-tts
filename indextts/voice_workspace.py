@@ -7,7 +7,7 @@ import threading
 import uuid
 
 from .runtime.profiles import FP32, PROFILES
-from .voicepack.archive import load_voicepack
+from .voicepack.archive import load_voicepack, extract_voicepack
 from .voicepack.provenance import sha256_file
 from .voicepack.schema import validate_identity
 
@@ -50,7 +50,7 @@ class VoiceWorkspace:
                         pack_path = path.parent / (profile + ".ivp")
                         if pack_path.exists():
                             try:
-                                pack = load_voicepack(pack_path)
+                                pack = load_voicepack(pack_path, profile=profile)
                                 record["variants"][profile] = {"ready": True, "manifest": pack.manifest}
                             except Exception as exc:
                                 record["variants"][profile] = {"ready": False, "error": str(exc)}
@@ -99,8 +99,11 @@ class VoiceWorkspace:
             staging = self.voices / (".install-" + uuid.uuid4().hex)
             staging.mkdir()
             try:
-                staged_pack = staging / (profile + ".ivp")
-                shutil.copyfile(pack_path, staged_pack)
+                installed_profiles=pack.available_profiles if pack.container_manifest else (profile,)
+                for precision in installed_profiles:
+                    staged_pack = staging / (precision + ".ivp")
+                    if pack.container_manifest:extract_voicepack(pack_path,staged_pack,precision)
+                    else:shutil.copyfile(pack_path,staged_pack)
                 if not exists:
                     if reference is not None:
                         ref_name = "reference" + Path(reference).suffix.lower()
@@ -124,10 +127,10 @@ class VoiceWorkspace:
                     # New entries are made visible together, never as half-created records.
                     os.rename(staging, directory)
                 else:
-                    os.replace(staged_pack, self.pack_path(voice_id, profile))
-                    preview = directory / (profile + "-preview")
-                    if preview.exists():
-                        self._remove(preview)
+                    for precision in installed_profiles:
+                        os.replace(staging/(precision+'.ivp'), self.pack_path(voice_id, precision))
+                        preview = directory / (precision + "-preview")
+                        if preview.exists():self._remove(preview)
             finally:
                 if staging.exists():
                     self._remove(staging)
@@ -158,7 +161,7 @@ class VoiceWorkspace:
             path = self.pack_path(voice_id, profile)
             if not path.exists():
                 raise ValueError("尚未生成此精度，请到制包页选择库中音色并生成")
-            load_voicepack(path)
+            load_voicepack(path, profile=profile)
             shutil.copyfile(path, destination)
             return record["instance"], sha256_file(destination)
 

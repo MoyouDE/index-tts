@@ -1,0 +1,89 @@
+/* Scoped to the integrated producer; legacy validation pages keep their layout. */
+.gradio-container:has(#producer-page) { max-width:1440px!important; padding:14px 20px!important; }
+.gradio-container:has(#producer-page) main.app { max-width:none!important; padding:0!important; }
+.gradio-container:has(#producer-page) .form:has(> #producer-context) { display:none!important; }
+#producer-context,#producer-save-payload,#producer-save-ack,#material-waveform-draft { display:none!important; }
+#producer-download-file.draft-dirty a { pointer-events:none; opacity:.4; }
+#producer-page { gap:10px; }
+#producer-page .gap { gap:8px; }
+#producer-page .column,#producer-page .row { gap:8px; }
+#producer-page .block { padding:8px; border-radius:9px; }
+#producer-page .block.hide-container { padding:0!important; }
+#producer-page .block label > span { background:transparent; padding:0; color:var(--body-text-color); }
+#producer-page [data-testid="block-info"] { background:transparent; padding:0; color:var(--body-text-color); font-size:12px; }
+#producer-page .prose p { margin:0 0 4px; }
+#producer-page .prose h3 { font-size:15px; margin:0 0 2px; }
+#producer-heading { align-items:center; gap:16px; }
+#producer-title { flex:3; }
+#producer-title h1 { font-size:24px; line-height:1.2; margin:0 0 5px; }
+#producer-title p { font-size:12px; color:var(--body-text-color-subdued); }
+#producer-save-status { flex:1; min-width:180px; text-align:right; font-size:12px; }
+#producer-toolbar { align-items:center; gap:8px; padding-bottom:8px; border-bottom:1px solid var(--border-color-primary); }
+#producer-toolbar > button { min-height:34px; }
+#producer-toolbar > .block { padding:6px 8px; }
+#producer-toolbar > .block > label { display:none; }
+#producer-toolbar [data-testid="block-info"] { display:none; }
+#producer-workspace { gap:14px; align-items:flex-start; }
+#producer-reference,#producer-finish { gap:8px; }
+#producer-finish { padding:12px; border:1px solid var(--border-color-primary); border-radius:12px; background:var(--block-background-fill); }
+#producer-source { align-items:flex-start; gap:8px; }
+#producer-source .file-preview,#producer-source .upload-container { min-height:40px; }
+#producer-source .upload-container .or { display:none; }
+#producer-source button[aria-dropeffect] > .wrap { display:flex; flex-direction:row; align-items:center; justify-content:center; gap:8px; font-size:12px; padding:20px 6px 4px; }
+#producer-source button[aria-dropeffect] .icon-wrap { width:22px; height:22px; }
+#producer-source button[aria-dropeffect] .or { display:none; }
+#producer-page .producer-tip { font-size:12px; line-height:1.5; color:var(--body-text-color-subdued); }
+#producer-filters { align-items:flex-end; gap:8px; }
+#producer-filters > .block { align-self:stretch; }
+#producer-filters > .form,#producer-filters > .column { gap:0; }
+#material-volume-enabled { padding:4px 8px!important; }
+#producer-result { font-size:12px; line-height:1.5; padding:7px 9px; background:var(--background-fill-secondary); border-radius:7px; }
+#producer-audition,#producer-final-download { gap:7px; padding-top:10px; border:0; border-top:1px solid var(--border-color-primary); border-radius:0; background:transparent; }
+#producer-audition > .gap,#producer-final-download > .gap { gap:7px; }
+#producer-page .producer-preview { padding:7px; border:1px solid var(--border-color-primary); border-radius:8px; }
+#producer-page .producer-preview .prose { font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+#producer-page .producer-preview .block { padding:0; border:0; }
+#producer-emotion .column,#producer-emotion .row { gap:6px; }
+#producer-emotion .block { padding:6px; }
+#producer-page .producer-audio .component-wrapper { padding:6px 8px; }
+#producer-page .producer-audio .subtitle-display:empty { display:none; }
+#producer-page .producer-audio .timestamps { font-size:11px; padding:2px 0; }
+#producer-page .producer-audio .controls { margin-top:0; }
+#producer-download-file { padding:0!important; }
+#producer-download-file:has(> .empty) { display:none; }
+#producer-page .material-wave { padding:10px; border-radius:12px; font-size:13px; }
+#producer-page .material-wave .workspace { gap:10px; }
+#producer-page .material-wave .pane { padding:9px; border-radius:9px; }
+#producer-page .material-wave h4 { font-size:14px; margin:0 0 5px; }
+#producer-page .material-wave .source-overview { height:64px; margin:5px 0 9px; }
+#producer-page .material-wave .clip-list { gap:6px; margin-top:6px; max-height:455px; }
+#producer-page .material-wave .staged { max-height:150px; }
+#producer-page .material-wave .clip-row { padding:6px 8px; border-radius:8px; }
+#producer-page .material-wave .clip-wave { height:26px; margin:1px 0; }
+#producer-page .material-wave button { min-height:28px; padding:4px 7px; font-size:12px; }
+#producer-page .material-wave .clip-top,#producer-page .material-wave .clip-bottom { gap:5px; }
+#producer-page .material-wave .editor-panel { margin-top:9px; padding-top:9px; }
+#producer-page .material-wave .tools { gap:4px; margin-bottom:5px; margin-top:5px; }
+#producer-page .material-wave .editor-wave { height:100px; }
+#producer-page .material-wave .navigation { margin-top:5px; padding:6px; }
+#producer-page .material-wave .pan { height:44px; }
+#producer-page .material-wave .legend { gap:8px; }
+#producer-page .material-wave .clock { font-size:11px; }
+#producer-page .material-wave .navigation-tools span { flex-basis:100%; }
+#producer-page .material-wave .navigation-hint { line-height:1.35; margin-top:3px; }
+@media(max-width:1080px) {
+  #producer-workspace { flex-direction:column; }
+  #producer-reference,#producer-finish { width:100%; min-width:0!important; }
+  #producer-page .material-wave .workspace { grid-template-columns:1fr 1fr; }
+  #producer-page .material-wave .candidates { max-height:480px; }
+}
+@media(max-width:640px) {
+  .gradio-container:has(#producer-page) { padding:10px!important; }
+  #producer-heading { flex-wrap:nowrap; gap:8px; }
+  #producer-save-status { min-width:110px; }
+  #producer-title h1 { font-size:21px; }
+  #producer-toolbar > button { flex:1!important; }
+  #producer-toolbar > .block,#producer-toolbar > .gap { flex-basis:100%!important; }
+  #producer-page .material-wave .workspace { grid-template-columns:1fr; }
+  #producer-page .material-wave .candidates { max-height:280px; }
+}

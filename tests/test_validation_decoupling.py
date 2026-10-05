@@ -80,8 +80,10 @@ def test_standalone_producer_entry_uses_fixed_directories_from_other_cwd(tmp_pat
     monkeypatch.chdir(tmp_path)
     entry = runpy.run_path(str(ROOT / "voice-producer/start.py"))
     entry["main"](["--port", "7863"])
-    options = dict(zip(received[0][::2], received[0][1::2]))
-    assert options["--modules"] == "producer"
+    assert '--producer-workflow' in received[0]
+    pairs = [a for a in received[0] if a != '--producer-workflow']
+    options = dict(zip(pairs[::2], pairs[1::2]))
+    assert options["--modules"] == "producer,audition"
     assert options["--source-model-dir"] == web.DEFAULT_SOURCE_MODEL_DIR
     assert options["--workspace-dir"] == str(ROOT / "outputs/voice-workbench")
     assert options["--port"] == "7863"
@@ -90,8 +92,7 @@ def test_standalone_producer_entry_uses_fixed_directories_from_other_cwd(tmp_pat
 def test_producer_asset_lock_reuses_existing_hashes_without_unrelated_assets():
     lock = json.loads((ROOT / "voice-producer/assets.lock.json").read_text(encoding="utf-8"))
     original = json.loads((ROOT / "tests/fixtures/reader-assets.lock.json").read_text(encoding="utf-8"))
-    expected = set(original["files"]) - {"examples/voice_01.wav", "examples/voice_02.wav",
-        "checkpoints/multilingual_zh_ja_yue_char_del.tiktoken", "checkpoints/hf_cache/bigvgan/config.json"}
+    expected = set(original["files"]) - {"examples/voice_01.wav", "examples/voice_02.wav"}
     assert set(lock["files"]) == expected | {"vad/silero-v6.0.onnx"}
     assert lock["schemaVersion"] == 1
     assert all(lock["files"][name] == original["files"][name] for name in expected)

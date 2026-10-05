@@ -193,7 +193,7 @@ class ReaderRuntime:
             if not directory.exists():
                 continue
             for path in sorted(directory.glob("*.ivp")):
-                pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint)
+                pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint, profile=self.profile)
                 provenance = pack.manifest.get("provenance", {})
                 if provenance.get("profile", self.profile) != self.profile:
                     raise VoicePackError(f"Voice pack precision profile does not match runtime: {path}")
@@ -219,7 +219,7 @@ class ReaderRuntime:
 
     def load_voice(self, path):
         """Install a checked pack without reloading generation weights."""
-        pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint)
+        pack = load_voicepack(path, expected_model_fingerprint=self.source_fingerprint, profile=self.profile)
         provenance = pack.manifest.get("provenance", {})
         if provenance.get("profile", self.profile) != self.profile:
             raise VoicePackError("Voice pack precision profile does not match runtime")

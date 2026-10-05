@@ -9,13 +9,25 @@ DEFAULT_SOURCE_MODEL_DIR = str(Path(__file__).resolve().parents[1] / "voice-prod
 
 
 def create_app(*, source_model_dir=DEFAULT_SOURCE_MODEL_DIR, emotion_model_dir="", output_dir="outputs/validation-web",
-               workspace_dir="outputs/voice-workbench", modules=None, cpu_threads=4):
+               workspace_dir="outputs/voice-workbench", modules=None, cpu_threads=4, producer_workflow=False,
+               drafts_dir="outputs/voice-producer-drafts", runtime_root="voice-producer/models/runtime"):
     enabled = parse_modules(modules)
     if not isinstance(cpu_threads, int) or isinstance(cpu_threads, bool) or cpu_threads < 1:
         raise ValueError("cpu-threads must be positive")
     import gradio as gr
     from .workbench_service import WorkbenchService
     service = WorkbenchService(output_dir, workspace_dir, modules=enabled, cpu_threads=cpu_threads)
+    if producer_workflow:
+        if not {"producer", "audition"}.issubset(enabled):
+            raise ValueError("制作流程需要 producer,audition 服务")
+        from .producer_drafts import ProducerDrafts
+        from .producer_workflow_web import build_page, WORKFLOW_CSS
+        drafts = ProducerDrafts(drafts_dir, service, source_model_dir, runtime_root, cpu_threads)
+        with gr.Blocks(title="音色制作", theme=gr.themes.Soft(), css=WORKFLOW_CSS) as app:
+            build_page(app, drafts)
+        app.workbench, app.drafts = service, drafts
+        app.queue(default_concurrency_limit=1)
+        return app
     producer_only = enabled == ("producer",)
     title = "IndexTTS 音色生成工具" if producer_only else "IndexTTS 模块验证"
     description = ("上传参考音频，生成、管理和下载本地音色包。每种精度保留最新包，不写入交接目录。"
@@ -67,13 +79,18 @@ def main(argv=None):
     parser.add_argument("--port", default=7861, type=int)
     parser.add_argument("--cpu-threads", default=4, type=int)
     parser.add_argument("--modules", type=parse_modules, default=parse_modules(), help="逗号分隔: producer,emotion,audition；默认全部")
+    parser.add_argument("--producer-workflow", action="store_true")
+    parser.add_argument("--drafts-dir", default="outputs/voice-producer-drafts")
+    parser.add_argument("--runtime-root", default="voice-producer/models/runtime")
     args = parser.parse_args(argv)
     if args.cpu_threads < 1:
         parser.error("cpu-threads must be positive")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    app = create_app(source_model_dir=args.source_model_dir, emotion_model_dir=args.emotion_model_dir, output_dir=args.output_dir, workspace_dir=args.workspace_dir, modules=args.modules, cpu_threads=args.cpu_threads)
+    app = create_app(source_model_dir=args.source_model_dir, emotion_model_dir=args.emotion_model_dir, output_dir=args.output_dir, workspace_dir=args.workspace_dir, modules=args.modules, cpu_threads=args.cpu_threads,
+                     producer_workflow=args.producer_workflow, drafts_dir=args.drafts_dir, runtime_root=args.runtime_root)
     app.launch(server_name=args.host, server_port=args.port, share=False, show_error=True,
-               max_file_size="2gb", allowed_paths=[str(Path(args.workspace_dir).expanduser().resolve())] if {"producer", "audition"}.intersection(args.modules) else [])
+               max_file_size="2gb", allowed_paths=[str(Path(p).expanduser().resolve()) for p in
+                    ([args.workspace_dir, args.drafts_dir] if args.producer_workflow else [args.workspace_dir])] if {"producer", "audition"}.intersection(args.modules) else [])
 
 
 if __name__ == "__main__":

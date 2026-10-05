@@ -1,5 +1,15 @@
 {
   "files": {
+    "checkpoints/hf_cache/bigvgan/config.json": {
+      "bytes": 1405,
+      "sha256": "88a1f47acf747db0b21e97a389d838566147f7a5464583ff5c8d819d870f03ee",
+      "url": "https://huggingface.co/nvidia/bigvgan_v2_22khz_80band_256x/resolve/633ff708ed5b74903e86ff1298cf4a98e921c513/config.json"
+    },
+    "checkpoints/multilingual_zh_ja_yue_char_del.tiktoken": {
+      "bytes": 907395,
+      "sha256": "747979631e813193436aabcff7c1c235d37de8097b71c563ec8b63b7a515c718",
+      "url": "https://huggingface.co/IndexTeam/IndexTTS-2.5/resolve/c39ce5ba981572cb187443877ff559dfb246ce63/multilingual_zh_ja_yue_char_del.tiktoken"
+    },
     "checkpoints/codec.pth": {
       "bytes": 607290935,
       "sha256": "d15cbed16a40f478438c961fb043f68dfa6353bf56c966761315db3433e9722c",

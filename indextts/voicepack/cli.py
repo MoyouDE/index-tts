@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "inspect":
         pack = load_voicepack(args.pack)
-        print(json.dumps(pack.manifest, ensure_ascii=False, indent=2, sort_keys=True))
+        print(json.dumps(pack.container_manifest or pack.manifest, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     if args.command == "verify":
         fingerprint = model_fingerprint(args.model_dir, args.config)

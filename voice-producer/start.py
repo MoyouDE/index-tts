@@ -16,7 +16,9 @@ def main(argv=None):
     args = parser.parse_args(argv)
     from indextts.validation_web import main as web_main
     web_main([
-        "--modules", "producer",
+        "--modules", "producer,audition", "--producer-workflow",
+        "--drafts-dir", str(ROOT / "outputs" / "voice-producer-drafts"),
+        "--runtime-root", str(ROOT / "voice-producer" / "models" / "runtime"),
         "--source-model-dir", str(ROOT / "voice-producer" / "models" / "checkpoints"),
         "--workspace-dir", str(ROOT / "outputs" / "voice-workbench"),
         "--output-dir", str(ROOT / "outputs" / "validation-web"),

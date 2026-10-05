@@ -6,6 +6,9 @@ import gradio as gr
 from .library_web import library_controls
 from .web_common import choices, ui_errors
 
+# Keep the auxiliary tools wired for future use, outside the simplified workflow.
+SHOW_PRODUCER_TOOLS = False
+
 
 def build_page(service, library, session, *, source_model_dir):
     source_model_dir = str(Path(source_model_dir).expanduser().resolve())
@@ -27,7 +30,7 @@ def build_page(service, library, session, *, source_model_dir):
         return path, report, message
 
     with gr.Tab("音色包生成", id="voices"):
-        with gr.Row():
+        with gr.Column():
             with gr.Column(scale=3, min_width=480):
                 name = gr.Textbox(label="音色名称", placeholder="给这个声音起个名字", render=False)
                 gender = gr.Dropdown([("未知", "unknown"), ("女声", "female"), ("男声", "male"), ("中性", "neutral")],
@@ -36,9 +39,6 @@ def build_page(service, library, session, *, source_model_dir):
                                    value="compatible-fp32", label="制包精度", render=False)
                 device = gr.Dropdown([("自动", "auto"), ("CPU", "cpu"), ("CUDA 0", "cuda:0")], value="auto",
                                      allow_custom_value=True, label="计算设备", render=False)
-                method = gr.Radio([("自动：一段用单段，多段用等权融合", "auto"),
-                                   ("只用主参考", "primary-only-v1"), ("多段身份等权融合", "speaker-mean-v1")],
-                                  value="auto", label="参考构建方法", render=False)
                 output = gr.File(label="下载生成的音色包", interactive=False, render=False)
                 report = gr.JSON(label="制包详情", render=False)
                 result = gr.Textbox(label="生成结果", interactive=False, render=False)
@@ -59,9 +59,9 @@ def build_page(service, library, session, *, source_model_dir):
                 from .material_web import build_controls
                 material_page = build_controls(service.materials, session, generate=build,
                     session_directory=service.session_dir, inputs=[name, gender, profile, device, session],
-                    outputs=[output, report, result], name=name, options=[profile, device, gender, method],
-                    method=method, diagnostics=diagnostics)
-            with gr.Column(scale=1, min_width=280):
+                    outputs=[output, report, result], name=name, options=[profile, device, gender],
+                    diagnostics=diagnostics, show_tools=SHOW_PRODUCER_TOOLS)
+            with gr.Accordion('音色库与下载', open=False, visible=SHOW_PRODUCER_TOOLS):
                 library_voice, library_profile = library_controls(library, service.rebuild, session, source_model_dir, device)
         def select_generated(result):
             manifest = result["manifest"]

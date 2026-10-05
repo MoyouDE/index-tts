@@ -105,7 +105,7 @@ class AuditionService:
         actual_profile = BF16 if manifest.get("runtimeAbi") == BF16_RUNTIME_ABI else FP32
         if actual_profile != profile:
             raise ValueError("模型精度与选择的音色包精度不匹配")
-        load_voicepack(snapshot, expected_model_fingerprint=manifest["sourceModelFingerprint"])
+        load_voicepack(snapshot, expected_model_fingerprint=manifest["sourceModelFingerprint"], profile=profile)
         key = (str(root), manifest_path.stat().st_mtime_ns, profile, device, optimizations, int(cpu_threads), allocator)
         if progress:
             progress(0.1, desc="等待 GPU / 加载裁剪模型")

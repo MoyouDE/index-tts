@@ -60,30 +60,29 @@ def test_workflow_saves_selection_and_chooses_method_without_changing_primary_ab
     from indextts.material_web import prepare_selection
     service, record = material
     selection, saved = prepare_selection(service, record["sourceId"], rows(record), "auto",
-                                         record["revision"], True, "auto")
+                                         record["revision"])
     assert selection["method"] == "speaker-mean-v1" and selection["primary"] == "b"
     assert selection["revision"] == saved["revision"]
     values = rows(saved)
     values[1][3] = False
     # Removing a manual primary recommends a remaining selected reference.
     selection, saved = prepare_selection(service, record["sourceId"], values, "b",
-                                         saved["revision"], True, "auto")
+                                         saved["revision"])
     assert selection["method"] == "primary-only-v1" and selection["primary"] == "a"
     assert service.record(record["sourceId"]) == saved
     with pytest.raises(ValueError, match="其他页面"):
-        prepare_selection(service, record["sourceId"], values, "auto", record["revision"], True, "auto")
+        prepare_selection(service, record["sourceId"], values, "auto", record["revision"])
 
 
-def test_workflow_rejects_unconfirmed_overlong_or_invalid_fusion_without_saving(material):
+def test_workflow_rejects_overlong_or_empty_selection_without_saving(material):
     from indextts.material_web import prepare_selection
     service, record = material
-    for values, approved, method, error in [
-        (rows(record), False, "auto", "确认"),
-        (edit_merge(rows(record), "a"), True, "auto", "拆分"),
-        ([["a", 1., 7., True]], True, "speaker-mean-v1", "至少"),
+    for values, error in [
+        (edit_merge(rows(record), "a"), "拆分"),
+        ([["a", 1., 7., False]], "至少"),
     ]:
         with pytest.raises(ValueError, match=error):
-            prepare_selection(service, record["sourceId"], values, "auto", record["revision"], approved, method)
+            prepare_selection(service, record["sourceId"], values, "auto", record["revision"])
         assert service.record(record["sourceId"]) == record
 
 
@@ -104,13 +103,13 @@ def test_workflow_encoding_failure_can_retry_and_queued_settings_are_fixed(mater
     try:
         sid = uuid.uuid4().hex
         prepared, revision, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            record["revision"], True, "auto", json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
+            record["revision"], json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
             "Voice", "unknown", "compatible-fp32", "cpu", sid)
         with pytest.raises(Exception, match="model unavailable"):
             callbacks["generate_snapshot"](prepared)
         # A retry uses the revision already returned before encoding failed.
         retry, _, _ = callbacks["prepare"](record["sourceId"], rows(record), "auto",
-            revision, True, "auto", json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
+            revision, json.dumps({"sourceId": record["sourceId"], "rows": rows(record), "primary": "auto"}),
             "Voice", "unknown", "compatible-fp32", "cpu", sid)
         result = callbacks["generate_snapshot"](retry)
         assert result[0] == "voice.ivp"
@@ -148,7 +147,7 @@ def test_intelligent_suggestions_leave_saved_manual_selection_unchanged(material
     service, record = material
     (service.directory(record["sourceId"])/"vad.wav").write_bytes(b"test")
     class Detector:
-        def detect(self, *args):
+        def detect(self, *args, **kwargs):
             return {"segments": [{"id": "suggested", "start": 2., "end": 4., "selected": True}]}
     service._detector = Detector()
     suggestions = service.suggest_segments(record["sourceId"])
@@ -165,13 +164,13 @@ def test_browser_draft_is_authoritative_and_source_switch_is_rejected(material, 
     prepare = next(f.fn for f in app.fns.values() if f.fn and f.fn.__name__ == "prepare")
     try:
         with pytest.raises(Exception, match="不一致"):
-            prepare(record["sourceId"], rows(record), "a", record["revision"], True, "auto",
+            prepare(record["sourceId"], rows(record), "a", record["revision"],
                     json.dumps({"sourceId": "other", "rows": rows(record), "primary": "a"}),
                     "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
         assert service.record(record["sourceId"]) == record
         # A recent graphical edit may precede table mirroring; generation uses that edit.
         edited = [["a", 2., 7., True], ["b", 9., 18., False]]
-        job, _, _ = prepare(record["sourceId"], rows(record), "b", record["revision"], True, "auto",
+        job, _, _ = prepare(record["sourceId"], rows(record), "b", record["revision"],
                     json.dumps({"sourceId": record["sourceId"], "rows": edited, "primary": "a"}),
                     "Voice", "unknown", "compatible-fp32", "cpu", uuid.uuid4().hex)
         assert job["selection"]["segments"] == [{"id": "a", "start": 2., "end": 7., "selected": True}]
@@ -259,7 +258,7 @@ def test_decode_failure_does_not_install_partial_material_and_next_import_recove
     from types import SimpleNamespace
     import indextts.material_service as module
     class Detector:
-        def detect(self,*args):
+        def detect(self,*args,**kwargs):
             return {"segments":[{"id":"a","start":0.,"end":1.,"selected":True}],
                     "speechSeconds":1.,"speechIntervals":[[0.,1.]]}
     service=MaterialService(tmp_path/"work",detector=Detector())
@@ -273,6 +272,8 @@ def test_decode_failure_does_not_install_partial_material_and_next_import_recove
         return SimpleNamespace(returncode=0,stderr="")
     monkeypatch.setattr(module.subprocess,"run",decode)
     imported=service.import_media(source)
+    assert not any(s['selected'] for s in imported['segments'])
+    assert imported['primary'] is None
     assert service.record(imported["sourceId"])==imported
     assert (service.directory(imported["sourceId"])/"original.mp4").read_bytes()==b"fixture"
 

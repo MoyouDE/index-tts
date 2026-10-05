@@ -28,6 +28,106 @@ def pack(path, profile=FP32, reference_hash="b"*64, value=0):
     return write_voicepack(path, manifest, tensors, _licenses())
 
 
+def test_dual_pack_profile_selection_metadata_and_library_import(tmp_path):
+    from indextts.voicepack.archive import combine_voicepacks, extract_voicepack, repackage_voicepack
+    import zipfile
+    first=pack(tmp_path/'fp32.ivp',FP32,value=.25)
+    second=pack(tmp_path/'bf16.ivp',BF16,value=.75)
+    dual=combine_voicepacks(tmp_path/'dual.ivp',first,second)
+    repeated=combine_voicepacks(tmp_path/'repeated.ivp',first,second)
+    assert dual.read_bytes()==repeated.read_bytes()
+    for profile,original,value,dtype in ((FP32,first,.25,torch.float32),(BF16,second,.75,torch.bfloat16)):
+        selected=load_voicepack(dual,profile=profile,expected_model_fingerprint='a'*64)
+        assert selected.available_profiles==(FP32,BF16) and selected.container_manifest['schemaVersion']==4
+        assert selected.manifest['provenance']['profile']==profile
+        assert selected.tensors['base_emotion'].dtype==dtype and selected.tensors['base_emotion'][0,0]==value
+        output=extract_voicepack(dual,tmp_path/(profile+'.ivp'),profile)
+        with zipfile.ZipFile(output) as a,zipfile.ZipFile(original) as b:
+            assert a.read('conditioning.safetensors')==b.read('conditioning.safetensors')
+            assert len(a.namelist())==5
+        runtime=ReaderRuntime.__new__(ReaderRuntime)
+        runtime.profile=profile;runtime.source_fingerprint='a'*64;runtime._voice_lock=threading.Lock()
+        runtime.manifest={'voiceCompatibility':{k:selected.manifest['provenance'][k] for k in
+            ('profile','referenceEncoderFingerprint','preprocessFingerprint')}}
+        runtime.load_voice(dual)
+        assert runtime.snapshot_voice(selected.voice_id).tensors['base_emotion'][0,0]==value
+        runtime.voice_dirs=[tmp_path/'runtime-voices'];runtime.voice_dirs[0].mkdir(exist_ok=True)
+        import shutil
+        shutil.copyfile(dual,runtime.voice_dirs[0]/'voice.ivp')
+        assert runtime.reload_voices()[0]['voiceId']==selected.voice_id
+    renamed=repackage_voicepack(dual,tmp_path/'renamed.ivp','new name','male')
+    with zipfile.ZipFile(dual) as a,zipfile.ZipFile(renamed) as b:
+        for name in a.namelist():
+            if not name.endswith('manifest.json'):assert a.read(name)==b.read(name)
+    for profile in (FP32,BF16):
+        selected=load_voicepack(renamed,profile=profile)
+        assert selected.manifest['displayName']=='new name' and selected.manifest['gender']=='male'
+    library=VoiceWorkspace(tmp_path/'dual-library'); library.install(renamed)
+    assert all(v['ready'] for v in library.items()[0]['variants'].values())
+    assert load_voicepack(library.pack_path(selected.voice_id,BF16)).manifest['provenance']['profile']==BF16
+
+
+@pytest.mark.parametrize('bad', ['source','reference','name','profile','license','corrupt-inactive','unknown-profile'])
+def test_dual_pack_rejects_inconsistent_or_corrupt_profiles(tmp_path,bad):
+    from indextts.voicepack.archive import combine_voicepacks, VoicePackError
+    import zipfile
+    first=pack(tmp_path/'fp32.ivp',FP32)
+    second=pack(tmp_path/'bf16.ivp',BF16)
+    if bad in {'source','reference','name','profile','license'}:
+        selected=load_voicepack(second); manifest=copy.deepcopy(selected.manifest);tensors=selected.tensors;licenses=_licenses()
+        if bad=='source':manifest['sourceModelFingerprint']='d'*64
+        if bad=='reference':manifest['provenance']['referenceSha256']='d'*64
+        if bad=='name':manifest['displayName']='another voice'
+        if bad=='profile':second=first
+        else:
+            if bad=='license':licenses['LICENSE']=b'changed license'
+            second=write_voicepack(tmp_path/'changed.ivp',manifest,tensors,licenses)
+        with pytest.raises(VoicePackError):combine_voicepacks(tmp_path/'dual.ivp',first,second)
+        assert not (tmp_path/'dual.ivp').exists()
+    else:
+        dual=combine_voicepacks(tmp_path/'dual.ivp',first,second)
+        if bad=='unknown-profile':
+            with pytest.raises(VoicePackError,match='未知'):load_voicepack(dual,profile='fp16')
+        else:
+            with zipfile.ZipFile(dual) as archive:raw={n:archive.read(n) for n in archive.namelist()}
+            raw['bf16/conditioning.safetensors']+=b'corrupt'
+            with zipfile.ZipFile(dual,'w') as archive:
+                for n,data in raw.items():archive.writestr(n,data)
+            # Selecting FP32 must still validate the inactive BF16 payload.
+            with pytest.raises(VoicePackError,match='哈希'):load_voicepack(dual,profile=FP32)
+
+
+def test_precision_builds_share_identical_cropped_reference_snapshot(tmp_path,monkeypatch):
+    import numpy as np
+    import soundfile as sf
+    from indextts.material_service import MaterialService, write_json
+    from indextts.material_web import prepare_selection
+    service=WorkbenchService(tmp_path/'jobs',tmp_path/'library',modules=('producer',))
+    materials=MaterialService(tmp_path/'materials')
+    source=uuid.uuid4().hex; directory=materials.directory(source); directory.mkdir()
+    sf.write(directory/'audio.wav',np.zeros(22050*5),22050)
+    record=dict(sourceId=source,sourceSha256='a'*64,audioSha256=sha256_file(directory/'audio.wav'),
+        durationSeconds=5,primary='a',segments=[dict(id='a',start=1,end=4,selected=True)])
+    record['revision']=materials.selection_revision(record);write_json(directory/'material.json',record)
+    selection,_=prepare_selection(materials,source,[['a',1,4,True]],'a',record['revision'])
+    hashes=[];cropped=[];crop=materials.crop
+    def tracked_crop(*args):
+        cropped.append(args);return crop(*args)
+    monkeypatch.setattr(materials,'crop',tracked_crop)
+    def fake_build(reference,vid,name,gender,profile,*args,**kwargs):
+        hashes.append(sha256_file(reference))
+        job=service.output_dir/uuid.uuid4().hex;job.mkdir(parents=True)
+        return str(pack(job/'voice.ivp',profile,hashes[-1])),{}
+    monkeypatch.setattr(service,'build',fake_build)
+    try:
+        first,_=service.build_selection(selection,'reader-female-01','阅读女声','female',FP32,'auto','unused',uuid.uuid4().hex,
+                                      materials=materials,temporary=True)
+        service.build_selection(selection,'reader-female-01','阅读女声','female',BF16,'auto','unused',uuid.uuid4().hex,
+                                materials=materials,temporary=True,reference_snapshot=Path(first).parent/'references')
+        assert len(cropped)==1 and len(hashes)==2 and hashes[0]==hashes[1]
+    finally:materials.close();service.close()
+
+
 def test_library_two_profiles_atomic_replacement_restart_and_delete(tmp_path):
     reference = tmp_path / "reference.wav"
     reference.write_bytes(b"fixed original recording")
